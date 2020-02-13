@@ -7,7 +7,7 @@ when declared(commandLineParams):
             f_str = commandLineParams()[0]
             f = fstr.parse
             f_sim = f.simplify
-            dx_f = f_sim.derive
+            dx_f = f.derive
             dx_f_sim = dx_f.simplify
 
         var n = cpuTime() - time;
@@ -17,3 +17,5 @@ when declared(commandLineParams):
         echo "Wert bei x = 2: \t\t" & $(to_node f.eval({0: 2.0}.to_table))
         echo "Derivative: \t\t\t" & $dx_f_sim
         echo "Time taken: ", int (n * 1000), " ms"
+
+# bsp: "ln(2 * x) / (e ^ (2 * x) + 2)"
