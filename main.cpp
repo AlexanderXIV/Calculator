@@ -94,7 +94,7 @@ ostream &operator<<(ostream &os, const Token &t)
     os << t.value;
     break;
   case TokenComma:
-    os << " , ";
+    os << "','";
     break;
   }
   return os;
@@ -540,7 +540,8 @@ struct Node
   int varId;
   string varName;
 
-  unique_ptr<Node> a, b;
+  // log(a, b) -> ln(4) == log(e, 4)
+  unique_ptr<Node> a /* base */, b /* value */;
 
   friend ostream &operator<<(ostream &os, const Node &t);
 
@@ -552,68 +553,61 @@ struct Node
 
 typedef unique_ptr<Node> NodePtr;
 
-NodePtr to_node(float value)
+inline float rad(float64 val) { return val * M_PI / 180; }
+inline float deg(float64 val) { return val * 180 / M_PI; }
+
+NodePtr to_node(float value) { return make_unique<Node>(NodeValue, value); }
+NodePtr const_e() { return make_unique<Node>(NodeCon, M_E); }
+NodePtr const_pi() { return make_unique<Node>(NodeCon, M_PI); }
+
+NodePtr operator+(NodePtr &a, NodePtr &b) { return make_unique<Node>(Node(NodeAdd, move(a), move(b))); }
+NodePtr operator-(NodePtr &a, NodePtr &b) { return make_unique<Node>(Node(NodeSub, move(a), move(b))); }
+NodePtr operator*(NodePtr &a, NodePtr &b) { return make_unique<Node>(Node(NodeMul, move(a), move(b))); }
+NodePtr operator/(NodePtr &a, NodePtr &b) { return make_unique<Node>(Node(NodeDiv, move(a), move(b))); }
+NodePtr operator^(NodePtr &a, NodePtr &b) { return make_unique<Node>(Node(NodePow, move(a), move(b))); }
+
+// bool operator==(const NodePtr &a, const NodePtr &b)
+// {
+//   if (a.get()->kind != b.get()->kind)
+//     return false;
+
+//   switch (a.get()->kind)
+//   {
+//   case NodeValue:
+//     return a.get()->value == b.get()->value;
+//   case NodeCon:
+//     return a.get()->value == b.get()->value;
+//   case NodeVar:
+//     return a.get()->varId == b.get()->varId;
+//   case NodeAdd:
+//     return a.get()->a == b.get()->a && a.get()->b == b.get()->b; // Vertauschungen hinzufügen? -> Problem: (4 + 3 == 3 + 4) -> false
+//   case NodeMul:
+//     return a.get()->a == b.get()->a && a.get()->b == b.get()->b;
+//   case NodeDiv:
+//     return a.get()->a == b.get()->a && a.get()->b == b.get()->b;
+//   case NodeSub:
+//     return a.get()->a == b.get()->a && a.get()->b == b.get()->b;
+//   case NodePow:
+//     return a.get()->a == b.get()->a && a.get()->b == b.get()->b;
+//   case NodeLog:
+//     return a.get()->a == b.get()->a && a.get()->b == b.get()->b;
+//   case NodeSin:
+//     return a.get()->a == b.get()->a;
+//   case NodeCos:
+//     return a.get()->a == b.get()->a;
+//   }
+//   assert(0 && "error");
+//   return false;
+// }
+
+inline bool cmp(float val)
 {
-  return make_unique<Node>(Node(NodeValue, value));
+  return abs(val - M_E) < 10e-5;
 }
 
-NodePtr operator+(NodePtr &a, NodePtr &b)
+inline bool cmp2(float val)
 {
-  return make_unique<Node>(Node(NodeAdd, move(a), move(b)));
-}
-
-NodePtr operator-(NodePtr &a, NodePtr &b)
-{
-  return make_unique<Node>(Node(NodeSub, move(a), move(b)));
-}
-
-NodePtr operator*(NodePtr &a, NodePtr &b)
-{
-  return make_unique<Node>(Node(NodeMul, move(a), move(b)));
-}
-
-NodePtr operator/(NodePtr &a, NodePtr &b)
-{
-  return make_unique<Node>(Node(NodeDiv, move(a), move(b)));
-}
-
-NodePtr operator^(NodePtr &a, NodePtr &b)
-{
-  return make_unique<Node>(Node(NodePow, move(a), move(b)));
-}
-
-bool operator==(const NodePtr &a, const NodePtr &b)
-{
-  if (a.get()->kind != b.get()->kind)
-    return false;
-
-  switch (a.get()->kind)
-  {
-  case NodeValue:
-    return a.get()->value == b.get()->value;
-  case NodeCon:
-    return a.get()->value == b.get()->value;
-  case NodeVar:
-    return a.get()->varId == b.get()->varId;
-  case NodeAdd:
-    return a.get()->a == b.get()->a && a.get()->b == b.get()->b; // Vertauschungen hinzufügen? -> Problem: (4 + 3 == 3 + 4) -> false
-  case NodeMul:
-    return a.get()->a == b.get()->a && a.get()->b == b.get()->b;
-  case NodeDiv:
-    return a.get()->a == b.get()->a && a.get()->b == b.get()->b;
-  case NodeSub:
-    return a.get()->a == b.get()->a && a.get()->b == b.get()->b;
-  case NodePow:
-    return a.get()->a == b.get()->a && a.get()->b == b.get()->b;
-  case NodeLog:
-    return a.get()->a == b.get()->a && a.get()->b == b.get()->b;
-  case NodeSin:
-    return a.get()->a == b.get()->a;
-  case NodeCos:
-    return a.get()->a == b.get()->a;
-  }
-  assert(0 && "error");
-  return false;
+  return abs(val - M_PI) < 10e-5;
 }
 
 ostream &stringify(ostream &os, const Node &t, int level)
@@ -621,9 +615,9 @@ ostream &stringify(ostream &os, const Node &t, int level)
   switch (t.kind)
   {
   case NodeCon:
-    if (t.value == M_E)
+    if (cmp(t.value))
       os << "e";
-    else if (t.value == M_PI)
+    else if (cmp2(t.value))
       os << "pi";
     else
       assert(0 && "unknown Constant");
@@ -738,7 +732,7 @@ ostream &stringify(ostream &os, const Node &t, int level)
     if (level > 2)
       os << "(";
 
-    if (t.a.get()->value == M_E)
+    if (cmp(t.a.get()->value))
     {
       os << "ln(";
       stringify(os, *t.b.get(), 1);
@@ -747,9 +741,9 @@ ostream &stringify(ostream &os, const Node &t, int level)
     else
     {
       os << "log(";
-      stringify(os, *t.b.get(), 1);
-      os << ", ";
       stringify(os, *t.a.get(), 1);
+      os << ", ";
+      stringify(os, *t.b.get(), 1);
       os << ")";
     }
 
@@ -847,33 +841,33 @@ NodePtr parse(TokenIter &iter, map<string, int> &vars, bool next_negated, int le
   else if (iter.take(TokenLn))
   {
     assert(iter.take(TokenOpen) && "failed parsing");
-    result = make_unique<Node>(Node(NodeLog, make_unique<Node>(Node(NodeCon, M_E)), parse(iter, vars, false)));
+    result = make_unique<Node>(NodeLog, const_e(), parse(iter, vars, false));
     assert(iter.take(TokenClose) && "failed parsing");
   }
   else if (iter.take(TokenSin))
   {
     assert(iter.take(TokenOpen) && "failed parsing");
-    result = make_unique<Node>(Node(NodeSin, parse(iter, vars, false)));
+    result = make_unique<Node>(NodeSin, parse(iter, vars, false));
     assert(iter.take(TokenClose) && "failed parsing");
   }
   else if (iter.take(TokenCos))
   {
     assert(iter.take(TokenOpen) && "failed parsing");
-    result = make_unique<Node>(Node(NodeCos, parse(iter, vars, false)));
+    result = make_unique<Node>(NodeCos, parse(iter, vars, false));
     assert(iter.take(TokenClose) && "failed parsing");
   }
   else if (iter.take(TokenTan))
   {
     assert(iter.take(TokenOpen) && "failed parsing");
-    result = make_unique<Node>(Node(NodeSin, parse(iter, vars, false)));
+    result = make_unique<Node>(NodeSin, parse(iter, vars, false));
     assert(iter.take(TokenClose) && "failed parsing");
   }
   else if (iter.take(TokenLog))
   {
     assert(iter.take(TokenOpen) && "failed parsing");
-    NodePtr temp = parse(iter, vars, false);
+    NodePtr tmp = parse(iter, vars, false);
     assert(iter.take(TokenComma) && "failed parsing");
-    result = make_unique<Node>(Node(NodeLog, parse(iter, vars, false), move(temp)));
+    result = make_unique<Node>(NodeLog, move(tmp), parse(iter, vars, false));
     assert(iter.take(TokenClose) && "failed parsing");
   }
   else if (iter.take(TokenVar))
@@ -881,19 +875,19 @@ NodePtr parse(TokenIter &iter, map<string, int> &vars, bool next_negated, int le
     string name = iter.token().name;
 
     if (name == "e")
-      result = make_unique<Node>(Node(NodeCon, M_E));
+      result = const_e();
     else if (name == "pi")
-      result = make_unique<Node>(Node(NodeCon, M_PI));
+      result = const_pi();
     else
     {
       map<string, int>::iterator it = vars.find(name);
       if (it != vars.end())
-        result = make_unique<Node>(Node(it->second, name));
+        result = make_unique<Node>(it->second, name);
       else
       {
         int index = vars.size();
         vars.emplace(name, index);
-        result = make_unique<Node>(Node(index, name));
+        result = make_unique<Node>(index, name);
       }
     }
   }
@@ -911,7 +905,7 @@ NodePtr parse(TokenIter &iter, map<string, int> &vars, bool next_negated, int le
     return result;
 
   if (next_negated)
-    result = make_unique<Node>(Node(NodeMul, to_node(-1), move(result)));
+    result = make_unique<Node>(NodeMul, to_node(-1), move(result));
 
   while (iter.take(TokenAdd) || iter.take(TokenSub) || iter.take(TokenMul) || iter.take(TokenDiv) || iter.take(TokenPot))
   {
@@ -939,7 +933,7 @@ NodePtr parse(TokenIter &iter, map<string, int> &vars, bool next_negated, int le
     else
       nk = NodePow;
 
-    result = make_unique<Node>(Node(nk, move(result), move(b)));
+    result = make_unique<Node>(nk, move(result), move(b));
   }
 
   return result;
@@ -952,6 +946,7 @@ NodePtr parse(string str, map<string, int> &vars)
 }
 #pragma endregion
 
+// vars ist FALSCH
 double eval(const NodePtr &ptr_node, const map<string, int> &vars)
 {
   Node *node = ptr_node.get();
@@ -976,142 +971,108 @@ double eval(const NodePtr &ptr_node, const map<string, int> &vars)
   case NodeCos:
     return cos(eval(node->a, vars));
   case NodeLog:
-    return log10(eval(node->a, vars)) / log10(eval(node->b, vars));
+    return log(eval(node->b, vars)) / log(eval(node->a, vars));
   case NodeVar:
     auto it = vars.find(node->varName);
-    assert(it != vars.end() && "");
+    assert(it != vars.end() && "Variable gibt es nicht");
     return it->second;
   }
   assert(0 && "error");
   return 0;
 }
 
-// NodePtr derive(NodePtr &ptr_node, map<string, int> &vars)
-// {
-//   Node *node = ptr_node.get();
-//   switch (node->kind)
-//   {
-//   case NodeValue:
-//     return node->value;
-//   case NodeCon:
-//     return node->value;
-//   case NodeAdd:
-//     return eval(node->a, vars) + eval(node->b, vars);
-//   case NodeSub:
-//     return eval(node->a, vars) - eval(node->b, vars);
-//   case NodeMul:
-//     return eval(node->a, vars) * eval(node->b, vars);
-//   case NodeDiv:
-//     return eval(node->a, vars) / eval(node->b, vars);
-//   case NodePow:
-//     return pow(eval(node->a, vars), eval(node->b, vars));
-//   case NodeSin:
-//     return sin(eval(node->a, vars));
-//   case NodeCos:
-//     return cos(eval(node->a, vars));
-//   case NodeLog:
-//     return log10(eval(node->a, vars)) / log10(eval(node->b, vars));
-//   case NodeVar:
-//     auto it = vars.find(node->varName);
-//     assert(it != vars.end() && "");
-//     return it->second;
-//   }
-//   assert(0 && "error");
-//   return 0;
-// }
+NodePtr copy(const NodePtr &p)
+{
+  switch (p.get()->kind)
+  {
+  case NodeValue:
+    return to_node(p.get()->value);
+  case NodeAdd:
+    return make_unique<Node>(NodeAdd, copy(p.get()->a), copy(p.get()->b));
+  case NodeMul:
+    return make_unique<Node>(NodeMul, copy(p.get()->a), copy(p.get()->b));
+  case NodeDiv:
+    return make_unique<Node>(NodeDiv, copy(p.get()->a), copy(p.get()->b));
+  case NodeSub:
+    return make_unique<Node>(NodeSub, copy(p.get()->a), copy(p.get()->b));
+  case NodeVar:
+    return make_unique<Node>(p.get()->varId, p.get()->varName);
+  case NodePow:
+    return make_unique<Node>(NodePow, copy(p.get()->a), copy(p.get()->b));
+  case NodeSin:
+    return make_unique<Node>(NodeSin, copy(p.get()->a));
+  case NodeCos:
+    return make_unique<Node>(NodeCos, copy(p.get()->a));
+  case NodeLog:
+    return make_unique<Node>(NodeLog, copy(p.get()->a), copy(p.get()->b));
+  case NodeCon:
+    return make_unique<Node>(NodeCon, p.get()->value);
+  }
+  assert(0 && "error");
+  return nullptr;
+}
 
-// to_string
+NodePtr derive(const NodePtr &ptr_node, int varID) // varID according to which is derived
+{
+  Node *node = ptr_node.get();
+  switch (node->kind)
+  {
+  case NodeValue:
+    return to_node(0);
+  case NodeCon:
+    return to_node(0);
+  case NodeAdd:
+    return make_unique<Node>(NodeAdd, derive(node->a, varID), derive(node->b, varID));
+  case NodeSub:
+    return make_unique<Node>(NodeSub, derive(node->a, varID), derive(node->b, varID));
+  case NodeMul:
+    return make_unique<Node>(NodeAdd, make_unique<Node>(NodeMul, copy(node->a), derive(node->b, varID)), make_unique<Node>(NodeMul, derive(node->a, varID), copy(node->b)));
+  case NodeDiv:
+    return make_unique<Node>(NodeDiv, make_unique<Node>(NodeSub, make_unique<Node>(NodeMul, copy(node->b), derive(node->a, varID)), make_unique<Node>(NodeMul, derive(node->b, varID), copy(node->a))), make_unique<Node>(NodePow, copy(node->b), to_node(2)));
+  case NodePow:
+    return make_unique<Node>(NodeMul, copy(ptr_node), make_unique<Node>(NodeAdd, make_unique<Node>(NodeMul, make_unique<Node>(NodeLog, const_e(), copy(node->a)), derive(node->b, varID)), make_unique<Node>(NodeMul, derive(make_unique<Node>(NodeLog, const_e(), copy(node->a)), varID), copy(node->b))));
+  case NodeSin:
+    return make_unique<Node>(NodeMul, make_unique<Node>(NodeCos, copy(node->a)), derive(node->a, varID));
+  case NodeCos:
+    return make_unique<Node>(NodeMul, to_node(-1), make_unique<Node>(NodeMul, make_unique<Node>(NodeSin, copy(node->a)), derive(node->a, varID)));
+  case NodeLog: // Annahme : log a(b) == log(a, b)
+    if (node->a.get()->kind == NodeCon && cmp(node->a.get()->value))
+      return make_unique<Node>(NodeDiv, derive(node->b, varID), copy(node->b));
+    else
+      return derive(make_unique<Node>(NodeDiv, make_unique<Node>(NodeLog, const_e(), copy(node->b)), make_unique<Node>(NodeLog, const_e(), copy(node->a))), varID);
+  case NodeVar:
+    return to_node(node->varId == varID);
+  }
+  assert(0 && "error");
+  return nullptr;
+}
+
+// input 2e -> 2 * e : mal ergaenzen
 
 int main()
 {
   ios::sync_with_stdio(false);
   cin.tie(0);
+  cout << setprecision(8);
 
-  // auto a = Node(NodeValue, 2);
-  // make_unique<Node>(a);
-  // auto b = Node(NodeValue, 5);
-  // string input = "-2(-x+1)x(x-1)(4x)*zy+variableX7";
-  // string input = "-1+7*(3-2)+2*sin(0.2)*log(4,5)";
-  string input = "-(-4-+2)+7*(3-2)+2*sin(0.2)*log(4,5)";
-  // x - +5;
-
+  string input;
   map<string, int> vars;
-  NodePtr n = parse(input, vars);
-  cout << *n.get() << " = " << eval(n, vars) << endl;
 
-  NodePtr a = to_node(4.1);
-  NodePtr b = to_node(4.0);
-  NodePtr c = a + b;
-  cout << c << endl;
+  // input = "-2(-x+1)x(x-1)(4x)*zy+variableX7";
+  // input = "-1+7*(3-2)+2*sin(0.2)*log(4,5)";
+  input = "-(-4-x--2)+7*(3-2)+2*sin(0.2)*log(4,5)";
+  // input = "x^7";
+  // input = "x / sin(x)";
+  // input = "log(2,x)";
+  // input = "ln(x) / ln(2)";
+  // input = "ln(x)";
+  // input = "ln(2)";
+  // input = "2*e*pi";
 
-  NodePtr a1 = to_node(4);
-  NodePtr b1 = to_node(4.1);
-  NodePtr c1 = a1 + b1;
-  cout << c1 << endl;
+  NodePtr f = parse(input, vars);
+  NodePtr d = derive(f, vars.find("x")->second);
 
-  cout << (c == c1) << endl;
-  // NodePtr c = make_unique<Node>(Node(NodeAdd, make_unique<Node>(Node(NodeValue, 2)), make_unique<Node>(Node(NodeValue, 7))));
-  // Node c = make_unique<Node>(Node(NodeValue, 2)) + make_unique<Node>(Node(NodeValue, 25));
-  // Node c = make_unique<Node>(Node(NodeValue, 2)) + make_unique<Node>(Node(NodeValue, 25));
-  // // NodePtr a = make_unique<Node>(Node(NodeValue, 3));
-
-  // cout << c << endl;
-
-  // bool test(false);
-
-  // for (auto i = 0; i <= 12; i++)
-  // {
-  //   cout << n_k(10, i) << endl;
-  // }
-
-  // cout << my_faculty(8, 4) << "\t" << my_faculty(8, 8) << endl;
-  // cout << my_pow(2.1, 0) << endl;
-  // cout << my_pow(2.1, 1) << endl;
-  // cout << my_pow(2.1, 2) << endl;
-
-  // for (size_t i = 1; i < 10; i++)
-  // {
-  //   cout << setprecision(35) << (double)i / 10 << ": " << my_tan((double)i / 10, 10e-10) << "\t" << tan((double)i / 10) << "\t" << tan((double)i / 10) - my_tan((double)i / 10, 10e-10) << endl;
-  // }
-  // int x = 6;
-  // cout << (x ^ 1) << endl;
-
-  // for (size_t i = 0; i < 24; i++)
-  // {
-  // }
-
-  // string input = "2*(x+1)*x*(x-1)*(4*x)*zy+variableX7";
-  //   cout << input << " <=> " << tokenize(input) << endl;
-
-  //   NodePtr n1 = parse(input);
-  //   if (n1)
-  //     cout << *n1.get() << endl;
-  //   else
-  //     cout << "error" << endl;
+  cout << f << " = " << eval(f, vars) << endl;
+  cout << d << endl;
+  // cout << eval(make_unique<Node>(NodeLog, /* base */ to_node(1), /* value */ to_node(7)), vars) << endl; //ln1/ln7
 };
-
-//   NodeValue,
-//   NodeAdd, NodeSub, NodeMul, NodeDiv,
-//   NodePow,
-//   NodeSin, NodeCos, NodeLog,
-//   ...
-
-// NodeValue - NodeValue: 1 // 2 * 2 -> 22
-// NodeValue - NodePow: 1 // 2 * 5^2 -> 52^2
-// NodeValue - NodeAdd, NodeSub, NodeMul, NodeDiv: 1
-// NodeValue - NodeSin, NodeCos, NodeLog: 0
-// NodeValue - NodeVar, NodeCon: 0
-
-// NodeAdd, NodeSub, NodeMul, NodeDiv - NodeAdd, NodeSub, NodeMul, NodeDiv: 1 // ...
-// NodeAdd, NodeSub, NodeMul, NodeDiv - NodePow: 1 // ...
-// NodeAdd, NodeSub, NodeMul, NodeDiv - NodeSin, NodeCos, NodeLog: 1
-// NodeAdd, NodeSub, NodeMul, NodeDiv - NodeVar, NodeCon: 1
-
-// NodePow - NodePow: 0
-// NodePow - NodeSin, NodeCos, NodeLog:
-// NodePow - NodeVar, NodeCon:
-
-// NodeSin, NodeCos, NodeLog - NodeSin, NodeCos, NodeLog:
-// NodeSin, NodeCos, NodeLog - NodeVar, NodeCon:
-
-// NodeVar, NodeCon - NodeVar, NodeCon: 1 // pi * e -> pie
