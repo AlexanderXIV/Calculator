@@ -1,6 +1,13 @@
 #include <bits/stdc++.h>
 using namespace std;
 
+#define watch(x) cout << #x << " is " << x << endl
+
+typedef long double decimal;
+typedef long long int number;
+typedef unsigned long long int u_number;
+const decimal decimal_epsilon = numeric_limits<decimal>::epsilon();
+
 #pragma region Tokenizer
 enum TokenKind
 {
@@ -26,12 +33,12 @@ struct Token
   TokenKind kind;
   // union
   // {
-  float value;
+  decimal value;
   string name;
   // };
 
   Token(TokenKind k) : kind(k){};
-  Token(TokenKind k, float val) : kind(TokenValue), value(val){};
+  Token(TokenKind k, decimal val) : kind(TokenValue), value(val){};
   Token(TokenKind k, string str) : kind(TokenVar), name(str){};
 
   friend ostream &operator<<(ostream &os, const Token &t);
@@ -116,7 +123,7 @@ ostream &operator<<(ostream &os, const vector<Token> &tokens)
   return os;
 }
 
-bool is_float(const string &str)
+bool is_decimal(const string &str)
 {
   if (str.empty())
     return false;
@@ -148,7 +155,7 @@ Token make_token(const string &str)
     return Token(TokenLog);
   if (str == "ln")
     return Token(TokenLn);
-  if (is_float(str))
+  if (is_decimal(str))
     return Token(TokenVar, stof(str));
   return Token(TokenValue, str);
 }
@@ -186,7 +193,7 @@ vector<Token> tokenize(string str)
     }
     else if (('a' <= chr && chr <= 'z') || ('A' <= chr && chr <= 'Z') || ('0' <= chr && chr <= '9') || '.')
     {
-      if (is_float(cur) && !is_float(cur + chr))
+      if (is_decimal(cur) && !is_decimal(cur + chr))
       {
         result.push_back(make_token(cur));
         result.push_back(Token(TokenMul));
@@ -207,10 +214,10 @@ vector<Token> tokenize(string str)
 #pragma region Calculator
 #define ACCURACY_STANDARD false
 
-const double standard_accuracy = 10e-10;
+const decimal standard_accuracy = 10e-10;
 const int sin_lookup_max = 10;
-const double pi_half = M_PI / 2;
-const long long int sin_lookup[sin_lookup_max] = {
+const decimal pi_half = M_PI / 2;
+const number sin_lookup[sin_lookup_max] = {
     1,
     6,
     120,
@@ -223,7 +230,7 @@ const long long int sin_lookup[sin_lookup_max] = {
     121645100408832000};
 
 const int cos_lookup_max = 11;
-const long long int cos_lookup[cos_lookup_max] = {
+const number cos_lookup[cos_lookup_max] = {
     1,
     2,
     24,
@@ -237,7 +244,7 @@ const long long int cos_lookup[cos_lookup_max] = {
     2432902008176640000};
 
 const int exp_lookup_max = 21;
-const long long int exp_lookup[exp_lookup_max] = {
+const number exp_lookup[exp_lookup_max] = {
     1,
     1,
     2,
@@ -261,17 +268,17 @@ const long long int exp_lookup[exp_lookup_max] = {
     2432902008176640000};
 const int ln_max = 2 * 50 + 1;
 
-long long int my_faculty(const long long int value)
+number my_faculty(const number value)
 {
-  long long int result = 1;
+  number result = 1;
   for (auto i = 1; i <= value; ++i)
     result *= i;
   return result;
 }
 
-double my_sin(double x, const double accuracy = standard_accuracy)
+decimal my_sin(decimal x, const decimal accuracy = standard_accuracy)
 {
-  double res = 0, x_sqr = x * x, new_val;
+  decimal res = 0, x_sqr = x * x, new_val;
   for (auto i = 0; i < sin_lookup_max; ++i)
   {
     new_val = x / sin_lookup[i];
@@ -286,9 +293,9 @@ double my_sin(double x, const double accuracy = standard_accuracy)
   return res;
 }
 
-double my_cos(double x, const double accuracy = standard_accuracy)
+decimal my_cos(decimal x, const decimal accuracy = standard_accuracy)
 {
-  double res = 0, x_sqr = x * x, new_val;
+  decimal res = 0, x_sqr = x * x, new_val;
   x = 1;
   for (auto i = 0; i < cos_lookup_max; ++i)
   {
@@ -304,9 +311,9 @@ double my_cos(double x, const double accuracy = standard_accuracy)
   return res;
 }
 
-int my_gcd(int a, int b)
+number my_gcd(number a, number b)
 {
-  int t;
+  number t;
   while (b)
   {
     t = b;
@@ -317,21 +324,10 @@ int my_gcd(int a, int b)
   return a;
 }
 
-double two_even_Bernoulli_number(int n, const double accuracy = standard_accuracy)
-{
-  double v = 2 * my_faculty(2 * n) / pow(2 * M_PI, 2 * n);
-  if (!(n & 1))
-    v = -v;
-  double res = 0;
-  for (auto i = 1; i < 30; ++i)
-    res += 1 / pow(i, 2 * n);
-  return v * res;
-}
-
-int n_k(int n, int k)
+number n_k(number n, number k)
 {
   assert(0 <= k && k <= n && "range");
-  long long int a = 1, b = 1;
+  number a = 1, b = 1;
 
   if (k < n - k)
   {
@@ -348,23 +344,23 @@ int n_k(int n, int k)
       b *= i;
   }
 
-  return a / b;
+  return (number)a / b;
 }
 
-int my_lcm(int a, int b)
+number my_lcm(number a, number b)
 {
   return (a * b) / my_gcd(a, b);
 }
 
-unsigned int my_fibonacci(unsigned int x)
+u_number my_fibonacci(u_number x)
 {
   if (x == 0)
     return 0;
   if (x == 1)
     return 1;
 
-  unsigned int res, h1 = 0, h2 = 1;
-  for (unsigned int i = 1; i < x; ++i)
+  u_number res, h1 = 0, h2 = 1;
+  for (u_number i = 1; i < x; ++i)
   {
     res = h1 + h2;
     h1 = h2;
@@ -374,9 +370,9 @@ unsigned int my_fibonacci(unsigned int x)
   return res;
 }
 
-double my_pow(double x, int n)
+decimal my_pow(decimal x, number n)
 {
-  double res = 1;
+  decimal res = 1;
   while (n > 0)
   {
     if (n & 1)
@@ -387,9 +383,9 @@ double my_pow(double x, int n)
   return res;
 }
 
-int my_pow(int x, int n)
+number my_pow(number x, number n)
 {
-  int res = 1;
+  number res = 1;
   while (n > 0)
   {
     if (n & 1)
@@ -398,10 +394,21 @@ int my_pow(int x, int n)
     x *= x;
   }
   return res;
+}
+
+decimal two_even_Bernoulli_number(number n)
+{
+  decimal v = 2 * my_faculty(2 * n) / (decimal)pow(2 * M_PI, 2 * n);
+  if (!(n & 1))
+    v = -v;
+  decimal res = 0;
+  for (auto i = 1; i < 30; ++i)
+    res += 1 / (decimal)pow(i, 2 * n);
+  return v * res;
 }
 
 const int asin_lookup_max = 17;
-const double asin_lookup[asin_lookup_max]{
+const decimal asin_lookup[asin_lookup_max]{
     1,
     0.5,
     0.375,
@@ -420,12 +427,12 @@ const double asin_lookup[asin_lookup_max]{
     0.14446444809436798095703125,
     0.1399499340914189815521240234375};
 
-double my_arcsin_slow(double x, const double accuracy = standard_accuracy)
+decimal my_arcsin_slow(decimal x)
 {
-  double res = 0, powers2 = x, x_sqr = x * x;
-  long long int powers = 1, aa = 1, bb = 1;
+  decimal res = 0, powers2 = x, x_sqr = x * x;
+  number powers = 1, aa = 1, bb = 1;
 
-  for (unsigned int i = 0; i < 30; ++i)
+  for (u_number i = 0; i < 30; ++i)
   {
     if (i > 0)
     {
@@ -441,10 +448,10 @@ double my_arcsin_slow(double x, const double accuracy = standard_accuracy)
   return res;
 }
 
-double my_arcsin(double x, const double accuracy = standard_accuracy)
+decimal my_arcsin(decimal x)
 {
-  double res = 0, powers2 = x, x_sqr = x * x;
-  for (unsigned int i = 0; i < asin_lookup_max; ++i)
+  decimal res = 0, powers2 = x, x_sqr = x * x;
+  for (u_number i = 0; i < asin_lookup_max; ++i)
   {
     res += asin_lookup[i] * powers2 / (2 * i + 1);
     powers2 *= x_sqr;
@@ -452,20 +459,20 @@ double my_arcsin(double x, const double accuracy = standard_accuracy)
   return res;
 }
 
-double my_arccos(double x, const double accuracy = standard_accuracy)
+decimal my_arccos(decimal x)
 {
-  return pi_half - my_arcsin(x, accuracy);
+  return pi_half - my_arcsin(x);
 }
 
-double my_tan(double x, const double accuracy = standard_accuracy)
+decimal my_tan(decimal x, const decimal accuracy = standard_accuracy)
 {
   return my_sin(x, accuracy) / (my_cos(x, accuracy));
 }
 // 1 / (1 / x - 1)
 
-// double Euler_numbers(double x, const double accuracy = standard_accuracy) // Eulerschen Zahlen
+// decimal Euler_numbers(decimal x, const decimal accuracy = standard_accuracy) // Eulerschen Zahlen
 // {
-//   double res = 0;
+//   decimal res = 0;
 //   int n;
 
 //   int a0 = 1, a1 = 1;
@@ -478,15 +485,15 @@ double my_tan(double x, const double accuracy = standard_accuracy)
 //   return res;
 // }
 
-// double my_tan(double x, const double accuracy = standard_accuracy)
+// decimal my_tan(decimal x, const decimal accuracy = standard_accuracy)
 // {
-//   double res = 0;
+//   decimal res = 0;
 //   return res;
 // }
 
-double my_exp(double x, const double accuracy = standard_accuracy)
+decimal my_exp(decimal x, const decimal accuracy = standard_accuracy)
 {
-  double res = 0, x_tmp = 1, new_val;
+  decimal res = 0, x_tmp = 1, new_val;
   for (auto i = 0; i < exp_lookup_max; ++i)
   {
     new_val = x_tmp / exp_lookup[i];
@@ -498,11 +505,11 @@ double my_exp(double x, const double accuracy = standard_accuracy)
   return res;
 }
 
-double my_ln(double x, const double accuracy = standard_accuracy)
+decimal my_ln(decimal x, const decimal accuracy = standard_accuracy)
 {
   assert(x > 0 && "ln <= 0 not defined");
   x = (x - 1) / (x + 1);
-  double res = 0, x_sqr = x * x, tmp = 1, new_val;
+  decimal res = 0, x_sqr = x * x, tmp = 1, new_val;
   for (auto i = 1; i < ln_max; i += 2)
   {
     new_val = tmp / i;
@@ -527,6 +534,7 @@ enum NodeKind
   NodePow,
   NodeSin,
   NodeCos,
+  NodeTan,
   NodeLog,
   NodeCon
 };
@@ -535,36 +543,49 @@ struct Node
 {
   NodeKind kind;
   // Optimierung: union
-  float value;
+  decimal value;
 
   int varId;
   string varName;
 
   // log(a, b) -> ln(4) == log(e, 4)
   unique_ptr<Node> a /* base */, b /* value */;
+  bool a_var, b_var; // true if in sub-tree a / b variable is used
 
   friend ostream &operator<<(ostream &os, const Node &t);
 
-  Node(NodeKind kind1, float val) : kind(kind1), value(val){};
-  Node(int vardId1, string varName1) : kind(NodeVar), varId(vardId1), varName(varName1){};
-  Node(NodeKind kind1, unique_ptr<Node> a1) : kind(kind1), a(move(a1)){};
-  Node(NodeKind kind1, unique_ptr<Node> a1, unique_ptr<Node> b1) : kind(kind1), a(move(a1)), b(move(b1)){};
+  Node(NodeKind kind1, decimal val) : kind(kind1), value(val), a_var(false), b_var(false){};
+  Node(int vardId1, string varName1) : kind(NodeVar), varId(vardId1), varName(varName1), a_var(false), b_var(false){};
+  Node(NodeKind kind1, unique_ptr<Node> a1) : kind(kind1), a(move(a1)), a_var(false), b_var(false){};
+  Node(NodeKind kind1, unique_ptr<Node> a1, unique_ptr<Node> b1) : kind(kind1), a(move(a1)), b(move(b1)), a_var(false), b_var(false){};
 };
 
 typedef unique_ptr<Node> NodePtr;
 
-inline float rad(float val) { return val * M_PI / 180; }
-inline float deg(float val) { return val * 180 / M_PI; }
+inline decimal rad(decimal val) { return val * M_PI / 180; }
+inline decimal deg(decimal val) { return val * 180 / M_PI; }
 
-NodePtr to_node(float value) { return make_unique<Node>(NodeValue, value); }
+NodePtr to_node(decimal value) { return make_unique<Node>(NodeValue, value); }
 NodePtr const_e() { return make_unique<Node>(NodeCon, M_E); }
 NodePtr const_pi() { return make_unique<Node>(NodeCon, M_PI); }
 
-NodePtr operator+(NodePtr &a, NodePtr &b) { return make_unique<Node>(Node(NodeAdd, move(a), move(b))); }
-NodePtr operator-(NodePtr &a, NodePtr &b) { return make_unique<Node>(Node(NodeSub, move(a), move(b))); }
-NodePtr operator*(NodePtr &a, NodePtr &b) { return make_unique<Node>(Node(NodeMul, move(a), move(b))); }
-NodePtr operator/(NodePtr &a, NodePtr &b) { return make_unique<Node>(Node(NodeDiv, move(a), move(b))); }
-NodePtr operator^(NodePtr &a, NodePtr &b) { return make_unique<Node>(Node(NodePow, move(a), move(b))); }
+NodePtr operator+(NodePtr a, NodePtr b) { return make_unique<Node>(Node(NodeAdd, move(a), move(b))); }
+NodePtr operator-(NodePtr a, NodePtr b) { return make_unique<Node>(Node(NodeSub, move(a), move(b))); }
+NodePtr operator*(NodePtr a, NodePtr b) { return make_unique<Node>(Node(NodeMul, move(a), move(b))); }
+NodePtr operator/(NodePtr a, NodePtr b) { return make_unique<Node>(Node(NodeDiv, move(a), move(b))); }
+NodePtr operator^(NodePtr a, NodePtr b) { return make_unique<Node>(Node(NodePow, move(a), move(b))); }
+NodePtr variable(int varId, string varName) { return make_unique<Node>(varId, varName); }
+NodePtr sin(NodePtr a) { return make_unique<Node>(NodeSin, move(a)); }
+NodePtr cos(NodePtr a) { return make_unique<Node>(NodeCos, move(a)); }
+NodePtr tan(NodePtr a) { return make_unique<Node>(NodeTan, move(a)); }
+NodePtr log(NodePtr a, NodePtr b) { return make_unique<Node>(NodeLog, move(a), move(b)); }
+// NodePtr log(NodePtr a) { return make_unique<Node>(NodeLog, a, 10); }
+NodePtr ln(NodePtr a) { return make_unique<Node>(NodeLog, const_e(), move(a)); }
+// NodePtr sqrt(NodePtr a) { return make_unique<Node>(NodePow, a, 0.5); }
+
+bool operator==(const NodePtr &a, const decimal &f) { return a.get()->kind == NodeValue && a.get()->value == f; }
+
+bool operator==(const decimal &f, const NodePtr &a) { return a.get()->kind == NodeValue && a.get()->value == f; }
 
 bool operator==(const NodePtr &a, const NodePtr &b)
 {
@@ -574,44 +595,38 @@ bool operator==(const NodePtr &a, const NodePtr &b)
   switch (a.get()->kind)
   {
   case NodeValue:
-    return a.get()->value == b.get()->value;
   case NodeCon:
     return a.get()->value == b.get()->value;
   case NodeVar:
     return a.get()->varId == b.get()->varId;
   case NodeAdd:
-    return a.get()->a == b.get()->a && a.get()->b == b.get()->b; // Vertauschungen hinzufügen? -> Problem: (4 + 3 == 3 + 4) -> false
   case NodeMul:
-    return a.get()->a == b.get()->a && a.get()->b == b.get()->b;
   case NodeDiv:
-    return a.get()->a == b.get()->a && a.get()->b == b.get()->b;
   case NodeSub:
-    return a.get()->a == b.get()->a && a.get()->b == b.get()->b;
   case NodePow:
-    return a.get()->a == b.get()->a && a.get()->b == b.get()->b;
   case NodeLog:
-    return a.get()->a == b.get()->a && a.get()->b == b.get()->b;
+    return a.get()->a == b.get()->a && a.get()->b == b.get()->b; // Vertauschungen hinzufügen? -> Problem: (4 + 3 == 3 + 4) -> false
   case NodeSin:
-    return a.get()->a == b.get()->a;
   case NodeCos:
+  case NodeTan:
     return a.get()->a == b.get()->a;
   }
   assert(0 && "error");
   return false;
 }
 
-inline bool cmp(float val) { return abs(val - M_E) < 10e-5; }
-inline bool cmp2(float val) { return abs(val - M_PI) < 10e-5; }
+inline bool is_const_e(decimal val) { return fabs(val - M_E) <= decimal_epsilon; }
+inline bool is_const_pi(decimal val) { return fabs(val - M_PI) <= decimal_epsilon; }
 
 ostream &stringify(ostream &os, const Node &t, int level)
 {
-  // level = 10;
+  level = 10;
   switch (t.kind)
   {
   case NodeCon:
-    if (cmp(t.value))
+    if (is_const_e(t.value))
       os << "e";
-    else if (cmp2(t.value))
+    else if (is_const_pi(t.value))
       os << "pi";
     else
       assert(0 && "unknown Constant");
@@ -621,7 +636,7 @@ ostream &stringify(ostream &os, const Node &t, int level)
       os << "(";
 
     if (t.value == floor(t.value))
-      os << (int)(t.value);
+      os << floor(t.value);
     else
       os << t.value;
 
@@ -655,47 +670,47 @@ ostream &stringify(ostream &os, const Node &t, int level)
       os << "(";
 
     // proversorisch, dringend ueberarbeiten
-    // if (t.a.get()->kind == NodeValue && t.a.get()->value == -1)
-    // {
-    //   os << "-";
-    //   stringify(os, *t.b.get(), 2);
-    // }
-    // else if (t.b.get()->kind == NodeValue && t.b.get()->value == -1)
-    // {
-    //   os << "-";
-    //   stringify(os, *t.a.get(), 2);
-    // }
-    // else if (t.b.get()->kind == NodeVar && t.a.get()->kind != NodeVar)
-    // {
-    //   stringify(os, *t.a.get(), 1);
-    //   stringify(os, *t.b.get(), 1);
-    // }
-    // else if (t.a.get()->kind == NodeVar && t.b.get()->kind != NodeVar)
-    // {
-    //   stringify(os, *t.b.get(), 1);
-    //   stringify(os, *t.a.get(), 1);
-    // }
-    // else if (t.a.get()->kind == NodeValue && (t.b.get()->kind == NodeCon || t.b.get()->kind == NodeSin || t.b.get()->kind == NodeCos || t.b.get()->kind == NodeLog))
-    // {
-    //   stringify(os, *t.a.get(), 1);
-    //   stringify(os, *t.b.get(), 1);
-    // }
-    // else if (t.b.get()->kind == NodeValue && (t.a.get()->kind == NodeCon || t.a.get()->kind == NodeSin || t.a.get()->kind == NodeCos || t.a.get()->kind == NodeLog))
-    // {
-    //   stringify(os, *t.b.get(), 1);
-    //   stringify(os, *t.a.get(), 1);
-    // }
-    // else if ((t.a.get()->kind == NodeCon || t.a.get()->kind == NodeSin || t.a.get()->kind == NodeCos || t.a.get()->kind == NodeLog) && (t.b.get()->kind == NodeCon || t.b.get()->kind == NodeSin || t.b.get()->kind == NodeCos || t.b.get()->kind == NodeLog))
-    // {
-    //   stringify(os, *t.a.get(), 1);
-    //   stringify(os, *t.b.get(), 1);
-    // }
-    // else
-    // {
-    stringify(os, *t.a.get(), 2);
-    os << " * ";
-    stringify(os, *t.b.get(), 2);
-    // }
+    if (t.a == -1)
+    {
+      os << "-";
+      stringify(os, *t.b.get(), 2);
+    }
+    else if (t.b == -1)
+    {
+      os << "-";
+      stringify(os, *t.a.get(), 2);
+    }
+    else if (t.b.get()->kind == NodeVar && t.a.get()->kind != NodeVar)
+    {
+      stringify(os, *t.a.get(), 1);
+      stringify(os, *t.b.get(), 1);
+    }
+    else if (t.a.get()->kind == NodeVar && t.b.get()->kind != NodeVar)
+    {
+      stringify(os, *t.b.get(), 1);
+      stringify(os, *t.a.get(), 1);
+    }
+    else if (t.a.get()->kind == NodeValue && (t.b.get()->kind == NodeCon || t.b.get()->kind == NodeSin || t.b.get()->kind == NodeCos || t.b.get()->kind == NodeLog))
+    {
+      stringify(os, *t.a.get(), 1);
+      stringify(os, *t.b.get(), 1);
+    }
+    else if (t.b.get()->kind == NodeValue && (t.a.get()->kind == NodeCon || t.a.get()->kind == NodeSin || t.a.get()->kind == NodeCos || t.a.get()->kind == NodeLog))
+    {
+      stringify(os, *t.b.get(), 1);
+      stringify(os, *t.a.get(), 1);
+    }
+    else if ((t.a.get()->kind == NodeCon || t.a.get()->kind == NodeSin || t.a.get()->kind == NodeCos || t.a.get()->kind == NodeLog) && (t.b.get()->kind == NodeCon || t.b.get()->kind == NodeSin || t.b.get()->kind == NodeCos || t.b.get()->kind == NodeLog))
+    {
+      stringify(os, *t.a.get(), 1);
+      stringify(os, *t.b.get(), 1);
+    }
+    else
+    {
+      stringify(os, *t.a.get(), 2);
+      os << " * ";
+      stringify(os, *t.b.get(), 2);
+    }
 
     if (level > 2)
       os << ")";
@@ -722,11 +737,16 @@ ostream &stringify(ostream &os, const Node &t, int level)
     stringify(os, *t.a.get(), 1);
     os << ")";
     break;
+  case NodeTan:
+    os << "tan(";
+    stringify(os, *t.a.get(), 1);
+    os << ")";
+    break;
   case NodeLog:
     if (level > 2)
       os << "(";
 
-    if (cmp(t.a.get()->value))
+    if (is_const_e(t.a.get()->value))
     {
       os << "ln(";
       stringify(os, *t.b.get(), 1);
@@ -813,9 +833,10 @@ int operators(TokenKind kind)
     return 2;
   case TokenPot:
     return 3;
+  default:
+    assert(0 && "error parsing");
+    return 0;
   }
-  assert(0 && "error parsing");
-  return 0;
 }
 
 NodePtr parse(TokenIter &iter, map<string, int> &vars, bool next_negated, int level = 0)
@@ -824,13 +845,29 @@ NodePtr parse(TokenIter &iter, map<string, int> &vars, bool next_negated, int le
   if (iter.take(TokenValue))
     result = to_node(iter.token().value);
   else if (iter.take(TokenLn))
+  {
+    assert(iter.take(TokenOpen) && "failed parsing");
     result = make_unique<Node>(NodeLog, const_e(), parse(iter, vars, false));
+    assert(iter.take(TokenClose) && "failed parsing");
+  }
   else if (iter.take(TokenSin))
+  {
+    assert(iter.take(TokenOpen) && "failed parsing");
     result = make_unique<Node>(NodeSin, parse(iter, vars, false));
+    assert(iter.take(TokenClose) && "failed parsing");
+  }
   else if (iter.take(TokenCos))
+  {
+    assert(iter.take(TokenOpen) && "failed parsing");
     result = make_unique<Node>(NodeCos, parse(iter, vars, false));
+    assert(iter.take(TokenClose) && "failed parsing");
+  }
   else if (iter.take(TokenTan))
-    result = make_unique<Node>(NodeSin, parse(iter, vars, false)); // Todo: ACHTUNG SIN != TAN
+  {
+    assert(iter.take(TokenOpen) && "failed parsing");
+    result = make_unique<Node>(NodeTan, parse(iter, vars, false));
+    assert(iter.take(TokenClose) && "failed parsing");
+  }
   else if (iter.take(TokenLog))
   {
     assert(iter.take(TokenOpen) && "failed parsing");
@@ -854,7 +891,7 @@ NodePtr parse(TokenIter &iter, map<string, int> &vars, bool next_negated, int le
         result = make_unique<Node>(it->second, name);
       else
       {
-        int index = vars.size();
+        size_t index = vars.size();
         vars.emplace(name, index);
         result = make_unique<Node>(index, name);
       }
@@ -908,9 +945,8 @@ NodePtr parse(string str, map<string, int> &vars)
   TokenIter iter = TokenIter(tokenize(str), 0);
   return parse(iter, vars, false);
 }
-#pragma endregion
 
-double eval(const NodePtr &ptr_node, const vector<float> &vars)
+decimal eval(const NodePtr &ptr_node, const vector<decimal> &vars)
 {
   Node *node = ptr_node.get();
   switch (node->kind)
@@ -933,40 +969,44 @@ double eval(const NodePtr &ptr_node, const vector<float> &vars)
     return sin(eval(node->a, vars));
   case NodeCos:
     return cos(eval(node->a, vars));
+  case NodeTan:
+    return tan(eval(node->a, vars));
   case NodeLog:
     return log(eval(node->b, vars)) / log(eval(node->a, vars));
   case NodeVar:
-    assert(node->varId <= vars.size() && "Variable gibt es nicht");
+    assert((size_t)node->varId <= vars.size() && "Variable gibt es nicht");
     return vars[node->varId];
   }
   assert(0 && "error");
   return 0;
 }
 
-NodePtr copy(const NodePtr &p)
+NodePtr copy2(const NodePtr &p)
 {
   switch (p.get()->kind)
   {
   case NodeValue:
     return to_node(p.get()->value);
   case NodeAdd:
-    return make_unique<Node>(NodeAdd, copy(p.get()->a), copy(p.get()->b));
+    return copy2(p.get()->a) + copy2(p.get()->b);
   case NodeMul:
-    return make_unique<Node>(NodeMul, copy(p.get()->a), copy(p.get()->b));
+    return copy2(p.get()->a) * copy2(p.get()->b);
   case NodeDiv:
-    return make_unique<Node>(NodeDiv, copy(p.get()->a), copy(p.get()->b));
+    return copy2(p.get()->a) / copy2(p.get()->b);
   case NodeSub:
-    return make_unique<Node>(NodeSub, copy(p.get()->a), copy(p.get()->b));
+    return copy2(p.get()->a) - copy2(p.get()->b);
   case NodeVar:
-    return make_unique<Node>(p.get()->varId, p.get()->varName);
+    return variable(p.get()->varId, p.get()->varName);
   case NodePow:
-    return make_unique<Node>(NodePow, copy(p.get()->a), copy(p.get()->b));
+    return copy2(p.get()->a) ^ copy2(p.get()->b);
   case NodeSin:
-    return make_unique<Node>(NodeSin, copy(p.get()->a));
+    return sin(copy2(p.get()->a));
   case NodeCos:
-    return make_unique<Node>(NodeCos, copy(p.get()->a));
+    return cos(copy2(p.get()->a));
+  case NodeTan:
+    return tan(copy2(p.get()->a));
   case NodeLog:
-    return make_unique<Node>(NodeLog, copy(p.get()->a), copy(p.get()->b));
+    return log(copy2(p.get()->a), copy2(p.get()->b));
   case NodeCon:
     return make_unique<Node>(NodeCon, p.get()->value);
   }
@@ -974,34 +1014,99 @@ NodePtr copy(const NodePtr &p)
   return nullptr;
 }
 
+NodePtr copy(const NodePtr &p)
+{
+  NodePtr c = copy2(p);
+  c.get()->a_var = p.get()->a_var;
+  c.get()->b_var = p.get()->b_var;
+  return c;
+}
+
+bool preprocessing(const NodePtr &ptr)
+{
+  switch (ptr.get()->kind)
+  {
+  case NodeVar:
+    return true;
+  case NodeValue:
+  case NodeCon:
+    return false;
+  case NodeAdd:
+  case NodeSub:
+  case NodeMul:
+  case NodeDiv:
+  case NodePow:
+  case NodeLog:
+    ptr.get()->a_var = preprocessing(ptr.get()->a);
+    ptr.get()->b_var = preprocessing(ptr.get()->b);
+    return ptr.get()->a_var || ptr.get()->b_var;
+  case NodeSin:
+  case NodeCos:
+  case NodeTan:
+    ptr.get()->a_var = preprocessing(ptr.get()->a);
+    return ptr.get()->a_var;
+  }
+  assert(0 && "error");
+  return false;
+}
+
+// derive and (partly) simplify a function
 NodePtr derive(const NodePtr &ptr_node, int varID) // varID according to which is derived
 {
   Node *node = ptr_node.get();
   switch (node->kind)
   {
   case NodeValue:
-    return to_node(0);
   case NodeCon:
     return to_node(0);
   case NodeAdd:
-    return make_unique<Node>(NodeAdd, derive(node->a, varID), derive(node->b, varID));
-  case NodeSub:
-    return make_unique<Node>(NodeSub, derive(node->a, varID), derive(node->b, varID));
-  case NodeMul:
-    return make_unique<Node>(NodeAdd, make_unique<Node>(NodeMul, copy(node->a), derive(node->b, varID)), make_unique<Node>(NodeMul, derive(node->a, varID), copy(node->b)));
-  case NodeDiv:
-    return make_unique<Node>(NodeDiv, make_unique<Node>(NodeSub, make_unique<Node>(NodeMul, copy(node->b), derive(node->a, varID)), make_unique<Node>(NodeMul, derive(node->b, varID), copy(node->a))), make_unique<Node>(NodePow, copy(node->b), to_node(2)));
-  case NodePow:
-    return make_unique<Node>(NodeMul, copy(ptr_node), make_unique<Node>(NodeAdd, make_unique<Node>(NodeMul, make_unique<Node>(NodeLog, const_e(), copy(node->a)), derive(node->b, varID)), make_unique<Node>(NodeMul, derive(make_unique<Node>(NodeLog, const_e(), copy(node->a)), varID), copy(node->b))));
-  case NodeSin:
-    return make_unique<Node>(NodeMul, make_unique<Node>(NodeCos, copy(node->a)), derive(node->a, varID));
-  case NodeCos:
-    return make_unique<Node>(NodeMul, to_node(-1), make_unique<Node>(NodeMul, make_unique<Node>(NodeSin, copy(node->a)), derive(node->a, varID)));
-  case NodeLog: // Annahme : log a(b) == log(a, b)
-    if (node->a.get()->kind == NodeCon && cmp(node->a.get()->value))
-      return make_unique<Node>(NodeDiv, derive(node->b, varID), copy(node->b));
+    if (node->a_var)
+      return (node->b_var) ? derive(node->a, varID) + derive(node->b, varID) : derive(node->a, varID);
     else
-      return derive(make_unique<Node>(NodeDiv, make_unique<Node>(NodeLog, const_e(), copy(node->b)), make_unique<Node>(NodeLog, const_e(), copy(node->a))), varID);
+      return (node->b_var) ? derive(node->b, varID) : to_node(0);
+  case NodeSub:
+    if (node->a_var)
+      return (node->b_var) ? derive(node->a, varID) - derive(node->b, varID) : derive(node->a, varID);
+    else
+      return (node->b_var) ? to_node(-1) * derive(node->b, varID) : to_node(0);
+  case NodeMul:
+    if (node->a_var)
+      return (node->b_var) ? copy(node->a) * derive(node->b, varID) + derive(node->a, varID) * copy(node->b) : derive(node->a, varID) * copy(node->b);
+    else
+      return (node->b_var) ? copy(node->a) * derive(node->b, varID) : to_node(0);
+  case NodeDiv:
+    if (node->a_var)
+      return (node->b_var) ? (copy(node->b) * derive(node->a, varID) - derive(node->b, varID) * copy(node->a)) / (copy(node->b) ^ to_node(2)) : derive(node->a, varID) / copy(node->b);
+    else
+      return (node->b_var) ? (to_node(-1) * derive(node->b, varID) * copy(node->a)) / (copy(node->b) ^ to_node(2)) : to_node(0);
+  case NodePow:
+    if (node->a_var)
+      return (node->b_var) ? (ln(copy(node->a)) * derive(node->b, varID) + copy(node->b) / copy(node->a) * derive(node->a, varID)) * copy(ptr_node) : copy(node->b) * (copy(node->a) ^ (copy(node->b) - to_node(1)));
+    else
+      return (node->b_var) ? ln(copy(node->a)) * derive(node->b, varID) * copy(ptr_node) : to_node(0);
+  case NodeSin:
+    return (node->a_var) ? cos(copy(node->a)) * derive(node->a, varID) : to_node(0);
+  case NodeCos:
+    return (node->a_var) ? to_node(-1) * sin(copy(node->a)) * derive(node->a, varID) : to_node(0);
+  case NodeTan:
+    return (node->a_var) ? derive(node->a, varID) * ((tan(copy(node->a)) ^ to_node(2)) + to_node(1)) : to_node(0);
+  case NodeLog: // Annahme : log a(b) == log(a, b)
+  {
+    if (node->a_var)
+    {
+      if (node->b_var)
+        return (ln(copy(node->a)) * (derive(node->b, varID) / copy(node->b)) - (derive(node->a, varID) / copy(node->a)) * ln(copy(node->b))) / (ln(copy(node->a)) ^ to_node(2));
+      else
+        return (to_node(-1) * (derive(node->a, varID) / copy(node->a)) * ln(copy(node->b))) / (ln(copy(node->a)) ^ to_node(2));
+    }
+    else
+    {
+      if (node->b_var)
+        return (node->a.get()->kind == NodeCon && is_const_e(node->a.get()->value)) ? derive(node->b, varID) / copy(node->b) : derive(node->b, varID) / (copy(node->b) * ln(copy(node->a)));
+      else
+        return to_node(0);
+    }
+  }
   case NodeVar:
     return to_node(node->varId == varID);
   }
@@ -1015,41 +1120,43 @@ NodePtr simplify(const NodePtr &ptr_node)
   switch (node->kind)
   {
   case NodeValue:
-    return make_unique<Node>(NodeValue, node->value);
+    return to_node(node->value);
   case NodeCon:
     return make_unique<Node>(NodeCon, node->value);
   case NodeVar:
-    return make_unique<Node>(node->varId, node->varName);
+    return variable(node->varId, node->varName);
   case NodeSin:
-    return make_unique<Node>(NodeSin, simplify(node->a));
+    return sin(simplify(node->a));
   case NodeCos:
-    return make_unique<Node>(NodeCos, simplify(node->a));
+    return cos(simplify(node->a));
+  case NodeTan:
+    return tan(simplify(node->a));
   case NodeLog:
   {
     NodePtr a = simplify(node->a); // base
     NodePtr b = simplify(node->b); // value
     if (b == 0)
       assert(0 && "log undefines for this value");
+    else if (b == 1)
+      return to_node(0);
     else if (a == b)
       return to_node(1);
-    else if (b.get()->kind == NodeValue && b.get()->value == 1)
-      return to_node(0);
-    return make_unique<Node>(NodeLog, simplify(node->a), simplify(node->b));
+    return log(move(a), move(b));
   }
   case NodeMul:
   {
     NodePtr a = simplify(node->a);
     NodePtr b = simplify(node->b);
 
-    if ((a.get()->kind == NodeValue && a.get()->value == 0) || (b.get()->kind == NodeValue && b.get()->value == 0))
+    if ((a == 0) || (b == 0))
       return to_node(0);
-    else if (a.get()->kind == NodeValue && a.get()->value == 1)
+    else if (a == 1)
       return b;
-    else if (b.get()->kind == NodeValue && b.get()->value == 1)
+    else if (b == 1)
       return a;
     else if (a.get()->kind == NodeValue && b.get()->kind == NodeValue)
       return to_node(a.get()->value * b.get()->value);
-    return make_unique<Node>(NodeMul, move(a), move(b));
+    return move(a) * move(b);
   }
   case NodePow:
   {
@@ -1070,18 +1177,18 @@ NodePtr simplify(const NodePtr &ptr_node)
         return a;
     }
     if (a.get()->kind == NodePow)
-      return simplify(make_unique<Node>(NodePow, move(a.get()->a), make_unique<Node>(NodeMul, move(a.get()->b), move(b))));
-    return make_unique<Node>(NodePow, simplify(node->a), simplify(node->b));
+      return simplify(move(a.get()->a) ^ move(a.get()->b) * move(b));
+    return move(a) ^ move(b);
   }
   case NodeAdd:
   {
     NodePtr a = simplify(node->a);
     NodePtr b = simplify(node->b);
-    if (a.get()->kind == NodeValue && a.get()->value == 0)
+    if (a == 0)
       return b;
-    else if (b.get()->kind == NodeValue && b.get()->value == 0)
+    else if (b == 0)
       return a;
-    return make_unique<Node>(NodeAdd, move(a), move(b));
+    return move(a) + move(b);
   }
   case NodeSub:
   {
@@ -1089,35 +1196,68 @@ NodePtr simplify(const NodePtr &ptr_node)
     NodePtr b = simplify(node->b);
     if (a.get()->kind == NodeValue && b.get()->kind == NodeValue)
       return to_node(a.get()->value - b.get()->value);
-    else if (b.get()->kind == NodeValue && b.get()->value == 0)
+    else if (b == 0)
       return a;
-    else if (a.get()->kind == NodeValue && a.get()->value == 0)
-      return simplify(make_unique<Node>(NodeMul, to_node(-1), move(b)));
-    return make_unique<Node>(NodeSub, move(a), move(b));
+    else if (a == 0)
+      return simplify(to_node(-1) * move(b));
+    return move(a) - move(b);
   }
   case NodeDiv:
   {
     NodePtr a = simplify(node->a);
     NodePtr b = simplify(node->b);
-    if (a.get()->kind == NodeValue && a.get()->value == 0)
+    if (a == 0)
       return to_node(0);
-    else if (b.get()->kind == NodeValue && b.get()->value == 0)
+    else if (b == 0)
       assert(0 && "can`t divide by 0");
-    return make_unique<Node>(NodeDiv, move(a), move(b));
+    return move(a) / move(b);
   }
   }
   assert(0 && "error");
   return nullptr;
 }
 
+int digits_before_dot(decimal a) { return (a < 10) ? 1 : (int)log10(a); }
+int digits(decimal a) { return abs((int)log10(a)); }
+
+// could be more efficient
+NodePtr stern_brocot_tree(decimal x, const int limit = 15, const decimal accuracy = 10e-10)
+{
+  number a, b, n, ap0 = 1, ap1 = 0, bp0 = 0, bp1 = 1, nn = (number)x;
+  x -= (number)x;
+  decimal original = x;
+  for (number i = 0; i < limit; ++i)
+  {
+    n = (number)floor(x);
+    x = 1 / (x - n);
+
+    a = ap0 + n * ap1;
+    b = bp0 + n * bp1;
+    ap0 = ap1;
+    bp0 = bp1;
+    ap1 = a;
+    bp1 = b;
+
+    if (fabs((decimal)b / a - original) < accuracy)
+      break;
+  }
+  return to_node(nn * a + b) / to_node(a);
+  // return to_node(nn) * to_node(a) + to_node(b) / to_node(a);
+}
+#pragma endregion
+
 // input 2e -> 2 * e : mal ergaenzen
-// Schreibweise "sin 4" anstatt "sin(4)"
+// Schreibweise "sin 4" anstatt "sin(4)" testen
+// Operatorenschreibweise
 
 int main()
 {
   ios::sync_with_stdio(false);
   cin.tie(0);
-  cout << setprecision(8);
+  cout << setprecision(15);
+
+  // Wann lohnt es sich eine Referenz / den Wert zu übergeben?
+  // for-schleife auto oder size_t
 
   // benchmark: "-(-4-5*x--2)+7*(3-2)+2*sin(0.2)*log(4,5)(x+1)" parse, simplify, derive, simplify ~ 60.000ns
   // auto start = chrono::system_clock::now();
@@ -1125,13 +1265,13 @@ int main()
   // auto t = chrono::duration_cast<chrono::nanoseconds>(end - start);
   // cout << t.count() << "ns" << endl;
 
-  float val = 2.7;
+  decimal val = 2.7;
   string input;
   map<string, int> vars;
 
   // input = "-2(-x+1)x(x-1)(4x)*zy+variableX7";
   // input = "-1+7*(3-2)+2*sin(0.2)*log(4,5)";
-  // input = "-(-4-5*x--2)+7*(3-2)+2*sin(0.2)*log(4,5)(x+1)";
+  // input = "-(-4-5*x--2)+7*(3-2)+2*sin(0.2)*log(4,5)"; //(x+1)";
   // input = "x^7";
   // input = "x / sin(x)";
   // input = "log(2,x)";
@@ -1143,21 +1283,24 @@ int main()
   // input = "(x^2)^3)";
   // input = "3x(x+1)";
   // input = "3x";
-  input = "sin x cos x";
+  // input = "sin(x) * cos(x)";
+  // input = "tan(x^2)";
+  input = "log(2, (1 - 3 * x))";
 
   NodePtr f = parse(input, vars);
   NodePtr fs = simplify(f);
+  preprocessing(fs);
   NodePtr d = derive(fs, vars.find("x")->second);
   NodePtr s1 = simplify(d);
 
-  vector<float> vars2(vars.size(), 0);
+  vector<decimal> vars2(vars.size(), 0);
   for (auto &item : vars2)
     item = val;
   cout << "input: '" << input << "'" << endl
        << "f(x) = " << f << endl
-       << "     = " << fs << " (simpliefied)" << endl
+       << "     = " << fs << " (simplified)" << endl
        << "f'(x) = " << d << endl
-       << "      = " << s1 << " (simpliefied)" << endl
+       << "      = " << s1 << " (simplified)" << endl
        << "f(" << val << ") = " << eval(fs, vars2) << endl
        << "f'(" << val << ") = " << eval(d, vars2) << endl;
 };
