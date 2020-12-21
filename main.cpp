@@ -1,7 +1,14 @@
 #include <bits/stdc++.h>
+#include <png++/png.hpp>
 using namespace std;
 
 #define watch(x) cout << #x << " is " << x << endl
+
+#if defined __linux__ || defined __APPLE__
+#else
+#define M_PI 3.141592653589793
+#define INFINITY 1e8
+#endif
 
 typedef long double decimal;
 typedef long long int number;
@@ -9,6 +16,7 @@ typedef unsigned long long int u_number;
 const decimal decimal_epsilon = numeric_limits<decimal>::epsilon();
 
 // hint: use exceptions instead of assert()
+// hint: Performance over code redundancy
 
 #pragma region Tokenizer
 enum TokenKind
@@ -21,13 +29,17 @@ enum TokenKind
   TokenSin,
   TokenCos,
   TokenTan,
+  TokenAsin,
+  TokenAcos,
+  TokenAtan,
   TokenLog,
   TokenLn,
   TokenVar,
   TokenOpen,
   TokenClose,
   TokenValue,
-  TokenComma
+  TokenComma,
+  TokenSqrt
 };
 
 struct Token
@@ -74,6 +86,15 @@ ostream &operator<<(ostream &os, const Token &t)
   case TokenTan:
     os << "tan";
     break;
+  case TokenAsin:
+    os << "asin";
+    break;
+  case TokenAcos:
+    os << "acos";
+    break;
+  case TokenAtan:
+    os << "atan";
+    break;
   case TokenLog:
     os << "log";
     break;
@@ -94,6 +115,9 @@ ostream &operator<<(ostream &os, const Token &t)
     break;
   case TokenComma:
     os << "','";
+    break;
+  case TokenSqrt:
+    os << "sqrt";
     break;
   }
   return os;
@@ -137,12 +161,20 @@ bool is_decimal(const string &str)
 
 Token make_token(const string &str)
 {
+  if (str == "sqrt")
+    return Token(TokenSqrt);
   if (str == "sin")
     return Token(TokenSin);
   if (str == "cos")
     return Token(TokenCos);
   if (str == "tan")
     return Token(TokenTan);
+  if (str == "asin")
+    return Token(TokenAsin);
+  if (str == "acos")
+    return Token(TokenAcos);
+  if (str == "atan")
+    return Token(TokenAtan);
   if (str == "log")
     return Token(TokenLog);
   if (str == "ln")
@@ -527,6 +559,9 @@ enum NodeKind
   NodeSin,
   NodeCos,
   NodeTan,
+  NodeAsin,
+  NodeAcos,
+  NodeAtan,
   NodeLn,
   NodeLog,
   NodeCon
@@ -573,10 +608,13 @@ inline NodePtr log(NodePtr a, NodePtr b) { return make_unique<Node>(NodeLog, mov
 inline NodePtr sin(NodePtr a) { return make_unique<Node>(NodeSin, move(a)); }
 inline NodePtr cos(NodePtr a) { return make_unique<Node>(NodeCos, move(a)); }
 inline NodePtr tan(NodePtr a) { return make_unique<Node>(NodeTan, move(a)); }
+inline NodePtr asin(NodePtr a) { return make_unique<Node>(NodeAsin, move(a)); }
+inline NodePtr acos(NodePtr a) { return make_unique<Node>(NodeAcos, move(a)); }
+inline NodePtr atan(NodePtr a) { return make_unique<Node>(NodeAtan, move(a)); }
 inline NodePtr ln(NodePtr a) { return make_unique<Node>(NodeLn, move(a)); }
 inline NodePtr variable(int varId, string varName) { return make_unique<Node>(varId, varName); }
+inline NodePtr sqrt(NodePtr a) { return make_unique<Node>(NodePow, move(a), to_node(0.5)); }
 // NodePtr log(NodePtr a) { return make_unique<Node>(NodeLog, a, 10); }
-// NodePtr sqrt(NodePtr a) { return make_unique<Node>(NodePow, a, 0.5); }
 
 inline bool operator==(const NodePtr &a, const NodeKind &k) { return a.get()->kind == k; }
 
@@ -608,6 +646,9 @@ bool operator==(const NodePtr &a, const NodePtr &b)
   case NodeSin:
   case NodeCos:
   case NodeTan:
+  case NodeAsin:
+  case NodeAcos:
+  case NodeAtan:
   case NodeLn:
     return a.get()->a == b.get()->a;
   }
@@ -628,6 +669,10 @@ inline bool operator!=(const NodePtr &a, const NodePtr &b) { return !(a == b); }
 inline bool is_const_e(decimal val) { return fabs(val - M_E) <= decimal_epsilon; }
 
 inline bool is_const_pi(decimal val) { return fabs(val - M_PI) <= decimal_epsilon; }
+
+inline bool is_const_e(const NodePtr &a) { return a.get()->kind == NodeCon && is_const_e(a.get()->value); }
+
+inline bool is_const_pi(const NodePtr &a) { return a.get()->kind == NodeCon && is_const_pi(a.get()->value); }
 
 // #define ALWAYS_CLIPS
 ostream &stringify(ostream &os, const Node &t, int level)
@@ -685,6 +730,21 @@ ostream &stringify(ostream &os, const Node &t, int level)
     break;
   case NodeTan:
     os << "tan(";
+    stringify(os, *t.a.get(), 1);
+    os << ")";
+    break;
+  case NodeAsin:
+    os << "asin(";
+    stringify(os, *t.a.get(), 1);
+    os << ")";
+    break;
+  case NodeAcos:
+    os << "acos(";
+    stringify(os, *t.a.get(), 1);
+    os << ")";
+    break;
+  case NodeAtan:
+    os << "atan(";
     stringify(os, *t.a.get(), 1);
     os << ")";
     break;
@@ -843,6 +903,12 @@ NodePtr parse(TokenIter &iter, map<string, int> &vars, bool next_negated, int le
     result = ln(parse(iter, vars, false));
     assert(iter.take(TokenClose) && "failed parsing");
   }
+  else if (iter.take(TokenSqrt))
+  {
+    assert(iter.take(TokenOpen) && "failed parsing");
+    result = sqrt(parse(iter, vars, false));
+    assert(iter.take(TokenClose) && "failed parsing");
+  }
   else if (iter.take(TokenSin))
   {
     assert(iter.take(TokenOpen) && "failed parsing");
@@ -859,6 +925,24 @@ NodePtr parse(TokenIter &iter, map<string, int> &vars, bool next_negated, int le
   {
     assert(iter.take(TokenOpen) && "failed parsing");
     result = tan(parse(iter, vars, false));
+    assert(iter.take(TokenClose) && "failed parsing");
+  }
+  else if (iter.take(TokenAsin))
+  {
+    assert(iter.take(TokenOpen) && "failed parsing");
+    result = asin(parse(iter, vars, false));
+    assert(iter.take(TokenClose) && "failed parsing");
+  }
+  else if (iter.take(TokenAcos))
+  {
+    assert(iter.take(TokenOpen) && "failed parsing");
+    result = acos(parse(iter, vars, false));
+    assert(iter.take(TokenClose) && "failed parsing");
+  }
+  else if (iter.take(TokenAtan))
+  {
+    assert(iter.take(TokenOpen) && "failed parsing");
+    result = atan(parse(iter, vars, false));
     assert(iter.take(TokenClose) && "failed parsing");
   }
   else if (iter.take(TokenLog))
@@ -915,19 +999,16 @@ NodePtr parse(TokenIter &iter, map<string, int> &vars, bool next_negated, int le
       return result;
     }
 
-    NodeKind nk;
     if (kind == TokenAdd)
-      nk = NodeAdd;
+      result = move(result) + parse(iter, vars, false, lv);
     else if (kind == TokenSub)
-      nk = NodeSub;
+      result = move(result) - parse(iter, vars, false, lv);
     else if (kind == TokenMul)
-      nk = NodeMul;
+      result = move(result) * parse(iter, vars, false, lv);
     else if (kind == TokenDiv)
-      nk = NodeDiv;
+      result = move(result) / parse(iter, vars, false, lv);
     else
-      nk = NodePow;
-
-    result = make_unique<Node>(nk, move(result), parse(iter, vars, false, lv));
+      result = move(result) ^ parse(iter, vars, false, lv);
   }
 
   return result;
@@ -964,6 +1045,12 @@ decimal eval(const NodePtr &ptr_node, const vector<decimal> &vars)
     return cos(eval(node->a, vars));
   case NodeTan:
     return tan(eval(node->a, vars));
+  case NodeAsin:
+    return asin(eval(node->a, vars));
+  case NodeAcos:
+    return acos(eval(node->a, vars));
+  case NodeAtan:
+    return atan(eval(node->a, vars));
   case NodeLn:
     return log(eval(node->a, vars));
   case NodeLog:
@@ -1000,6 +1087,12 @@ NodePtr copy2(const NodePtr &p)
     return cos(copy2(p.get()->a));
   case NodeTan:
     return tan(copy2(p.get()->a));
+  case NodeAsin:
+    return asin(copy2(p.get()->a));
+  case NodeAcos:
+    return acos(copy2(p.get()->a));
+  case NodeAtan:
+    return atan(copy2(p.get()->a));
   case NodeLn:
     return ln(copy2(p.get()->a));
   case NodeLog:
@@ -1020,6 +1113,8 @@ NodePtr copy(const NodePtr &p)
 }
 
 // derive and (partly) simplify a function
+// error: sqrt(x^2)' = x -> should be abs(x)
+// Todo: abs()
 NodePtr derive(const NodePtr &ptr_node, int varID) // varID according to which is derived
 {
   Node *node = ptr_node.get();
@@ -1059,6 +1154,12 @@ NodePtr derive(const NodePtr &ptr_node, int varID) // varID according to which i
     return (node->a_var) ? to_node(-1) * sin(copy(node->a)) * derive(node->a, varID) : to_node(0);
   case NodeTan:
     return (node->a_var) ? derive(node->a, varID) * ((tan(copy(node->a)) ^ to_node(2)) + to_node(1)) : to_node(0);
+  case NodeAsin:
+    return derive(node->a, varID) / sqrt(to_node(1) - (copy(node->a) ^ to_node(2)));
+  case NodeAcos:
+    return (to_node(-1) * derive(node->a, varID)) / sqrt(to_node(1) - (copy(node->a) ^ to_node(2)));
+  case NodeAtan:
+    return derive(node->a, varID) / (to_node(1) + (copy(node->a) ^ to_node(2)));
   case NodeLog: // Annahme : log a(b) == log(a, b)
   {
     if (node->a_var)
@@ -1097,7 +1198,7 @@ NodePtr unflatten(vector<NodePtr> terms, NodeKind node_kind)
 {
   NodePtr cur = move(terms[0]);
 
-  for (int i = 1; i < terms.size(); ++i)
+  for (size_t i = 1; i < terms.size(); ++i)
     if (node_kind == NodeAdd || node_kind == NodeSub || node_kind == NodeMul || node_kind == NodeDiv || node_kind == NodePow)
       cur = make_unique<Node>(node_kind, move(cur), move(terms[i]));
   return cur;
@@ -1115,11 +1216,27 @@ NodePtr simplify(const NodePtr &ptr_node)
   case NodeVar:
     return variable(node->varId, node->varName);
   case NodeSin:
-    return sin(simplify(node->a));
+  {
+    NodePtr a = simplify(node->a);
+    // if (a == NodeAsin)
+    //   return move(a.get()->a);
+    return sin(move(a));
+  }
   case NodeCos:
     return cos(simplify(node->a));
   case NodeTan:
     return tan(simplify(node->a));
+  case NodeAsin:
+    return asin(simplify(node->a));
+  case NodeAcos:
+  {
+    NodePtr a = simplify(node->a);
+    // if (a == NodeCos)
+    //   return move(a.get()->a);
+    return acos(move(a));
+  }
+  case NodeAtan:
+    return atan(simplify(node->a));
   case NodePow:
   {
     NodePtr a = simplify(node->a);
@@ -1151,12 +1268,14 @@ NodePtr simplify(const NodePtr &ptr_node)
   }
   case NodeLn:
   {
-    NodePtr b = simplify(node->b); // value
-    if (b == 0)
+    NodePtr a = simplify(node->a); // value
+    if (a == 0)
       assert(0 && "ln undefined for this value");
-    else if (b == 1)
+    else if (a == 1)
       return to_node(0);
-    return ln(move(b));
+    else if (is_const_e(a))
+      return to_node(1);
+    return ln(move(a));
   }
   case NodeMul:
   {
@@ -1171,6 +1290,14 @@ NodePtr simplify(const NodePtr &ptr_node)
       return a;
     else if (a == NodeValue && b == NodeValue)
       return to_node(a.get()->value * b.get()->value);
+    else if (a == NodeMul && a.get()->a == NodeValue && b == NodeValue)
+      return simplify(move(a.get()->b) * to_node(a.get()->a.get()->value * b.get()->value));
+    else if (a == NodeMul && a.get()->b == NodeValue && b == NodeValue)
+      return simplify(move(a.get()->a) * to_node(a.get()->b.get()->value * b.get()->value));
+    else if (b == NodeMul && b.get()->a == NodeValue && a == NodeValue)
+      return simplify(move(b.get()->b) * to_node(b.get()->a.get()->value * a.get()->value));
+    else if (b == NodeMul && b.get()->b == NodeValue && a == NodeValue)
+      return simplify(move(b.get()->a) * to_node(b.get()->b.get()->value * a.get()->value));
     else if (a == b)
       return simplify(move(a) ^ to_node(2));
 
@@ -1242,10 +1369,99 @@ NodePtr stern_brocot_tree(decimal x, const int limit = 15, const decimal accurac
   return to_node(nn * a + b) / to_node(a);
   // return to_node(nn) * to_node(a) + to_node(b) / to_node(a);
 }
+
+decimal deriveAt(const NodePtr &ptr_node, vector<decimal> &vars, int varId, const int accuracy = 8)
+{
+  decimal num1 = eval(ptr_node, vars);
+  vars[varId] += 1e-8;
+  return 1e8 * (eval(ptr_node, vars) - num1);
+}
 #pragma endregion
 
 // input 2e -> 2 * e : mal ergaenzen
 // Schreibweise "sin 4" anstatt "sin(4)" testen
+
+#pragma region Visualisation
+void WuDrawLine(png::image<png::rgb_pixel_16> &img, const png::rgb_pixel_16 &col, float x0, float y0, float x1, float y1)
+{
+  auto plot = [](png::image<png::rgb_pixel_16> &img, const png::rgb_pixel_16 &col, int x, int y, float brightness) -> void { img.set_pixel(x, y, png::rgb_pixel_16(col.red * brightness, col.green * brightness, col.blue * brightness)); };
+  auto ipart = [](float x) -> int { return int(std::floor(x)); };
+  auto round = [](float x) -> float { return std::round(x); };
+  auto fpart = [](float x) -> float { return x - std::floor(x); };
+  auto rfpart = [=](float x) -> float { return 1 - fpart(x); };
+
+  const bool steep = abs(y1 - y0) > abs(x1 - x0);
+  if (steep)
+  {
+    std::swap(x0, y0);
+    std::swap(x1, y1);
+  }
+  if (x0 > x1)
+  {
+    std::swap(x0, x1);
+    std::swap(y0, y1);
+  }
+
+  const float dx = x1 - x0;
+  const float dy = y1 - y0;
+  const float gradient = (dx == 0) ? 1 : dy / dx;
+
+  int xpx11;
+  float intery;
+  {
+    const float xend = round(x0);
+    const float yend = y0 + gradient * (xend - x0);
+    const float xgap = rfpart(x0 + 0.5f);
+    xpx11 = int(xend);
+    const int ypx11 = ipart(yend);
+    if (steep)
+    {
+      plot(img, col, ypx11, xpx11, rfpart(yend) * xgap);
+      plot(img, col, ypx11 + 1, xpx11, fpart(yend) * xgap);
+    }
+    else
+    {
+      plot(img, col, xpx11, ypx11, rfpart(yend) * xgap);
+      plot(img, col, xpx11, ypx11 + 1, fpart(yend) * xgap);
+    }
+    intery = yend + gradient;
+  }
+
+  int xpx12;
+  {
+    const float xend = round(x1);
+    const float yend = y1 + gradient * (xend - x1);
+    const float xgap = rfpart(x1 + 0.5f);
+    xpx12 = int(xend);
+    const int ypx12 = ipart(yend);
+    if (steep)
+    {
+      plot(img, col, ypx12, xpx12, rfpart(yend) * xgap);
+      plot(img, col, ypx12 + 1, xpx12, fpart(yend) * xgap);
+    }
+    else
+    {
+      plot(img, col, xpx12, ypx12, rfpart(yend) * xgap);
+      plot(img, col, xpx12, ypx12 + 1, fpart(yend) * xgap);
+    }
+  }
+
+  if (steep)
+    for (int x = xpx11 + 1; x < xpx12; x++)
+    {
+      plot(img, col, ipart(intery), x, rfpart(intery));
+      plot(img, col, ipart(intery) + 1, x, fpart(intery));
+      intery += gradient;
+    }
+  else
+    for (int x = xpx11 + 1; x < xpx12; x++)
+    {
+      plot(img, col, x, ipart(intery), rfpart(intery));
+      plot(img, col, x, ipart(intery) + 1, fpart(intery));
+      intery += gradient;
+    }
+}
+#pragma endregion
 
 int main()
 {
@@ -1262,8 +1478,8 @@ int main()
   // auto t = chrono::duration_cast<chrono::nanoseconds>(end - start);
   // cout << t.count() << "ns" << endl;
 
-  NodePtr p1 = to_node(7) + to_node(11);
-  vector<NodePtr> vc;
+  // NodePtr p1 = to_node(7) + to_node(11);
+  // vector<NodePtr> vc;
   // let terms = node.flatten().map(simplify)
 
   // var
@@ -1279,8 +1495,8 @@ int main()
   //     rest.add(value_sum.value())
 
   // return rest.unflatten(NodeAdd)
-  for (auto &item : vc)
-    cout << item << endl;
+  // for (auto &item : vc)
+  //   cout << item << endl;
 
   decimal val = 2.7;
   string input;
@@ -1288,7 +1504,7 @@ int main()
 
   // input = "-2(-x+1)x(x-1)(4x)*zy+variableX7";
   // input = "-1+7*(3-2)+2*sin(0.2)*log(4,5)";
-  input = "-(-4-5*x--2)+7*(3-2)+2*sin(0.2)*log(4,5)*(x-1)"; //(x+1)";
+  // input = "-(-4-5*x--2)+7*(3-2)+2*sin(0.2)*log(4,5)*(x-1)"; //(x+1)";
   // input = "x^7";
   // input = "x / sin(x)";
   // input = "log(2,x)";
@@ -1303,6 +1519,25 @@ int main()
   // input = "sin(x) * cos(x)";
   // input = "tan(x^2)";
   // input = "log(2, 1 - 3 * x)";
+  // input = "sqrt(2^x)";
+  // input = "atan(sqrt(e^x))";
+
+  // input = "atan(1 / x)"; // '= -1/(1+x^2)
+  // input = "asin(x - 1)"; // 1 / sqrt(2x - x^2)
+  // input = "(1 / a) * atan(x / a)"; // 1 / (a^2 + x^2)
+  // input = "atan((x + 1) / (x - 1))"; // -1/(1+x^2)
+  // input = "atan(x - sqrt(1 + x ^ 2))"; // 1/(2(1+x^2))
+  // input = "arccos(x) * arctan(x)"; // acos(x)/(1+x^2) - atan(x)/sqrt(1-x^2)
+  // input = "asin(sqrt(1 - x ^ 2))"; // -x/(abs(x)sqrt(1-x^2)) -> x / abs(x) = sign(x)
+  // input = "atan(sqrt(e^x))"; // sqrt(e^x)/(2(1+e^x))
+  // input = "asin(1 / sqrt(x))"; // -1/(2x*sqrt(x-1))
+  // input = "x * asin(x) + sqrt(1 - x^2)"; // asin(x)
+  // error, should be asin(x)
+
+  // input = "asin((1 - x^2) / (1 + x^2)";
+  input = "tan(ln(x))";
+  // input = "sin(x)";
+  // input = "(2x) / (1 + x^2)"; // 2x / (...) ???
 
   auto start = chrono::system_clock::now();
   NodePtr f = parse(input, vars);
@@ -1323,4 +1558,41 @@ int main()
        << "      = " << s1 << " (simplified)" << endl
        << "f(" << val << ") = " << eval(fs, vars2) << endl
        << "f'(" << val << ") = " << eval(d, vars2) << endl;
+
+  ios::sync_with_stdio(false);
+  cin.tie(0);
+  cout << setprecision(8);
+
+  int height = 1080;
+  int width = 1920;
+  // int window_left = -0.5, window_right = 10, window_bottom = -7, window_top = 4;
+  float window_left = -0.5, window_right = 10, window_bottom = -0.5, window_top = 10;
+
+  png::image<png::rgb_pixel_16> img(width, height);
+  png::rgb_pixel_16 white((uint16_t)(UINT16_MAX), (uint16_t)(UINT16_MAX), (uint16_t)(UINT16_MAX));
+  png::rgb_pixel_16 red((uint16_t)(UINT16_MAX), 0, (uint16_t)(UINT16_MAX / 2));
+
+  float scale_tb = window_top - window_bottom;
+  float scale_lr = window_right - window_left;
+  float coor_x = (float) width - (float)(width - 1) * window_top / scale_tb;
+  float coor_y = (float)(height - 1) * window_right / scale_lr;
+  WuDrawLine(img, white, coor_x, 0, coor_x, height - 1);
+  WuDrawLine(img, white, 0, coor_y, width - 1, coor_y);
+  vector<decimal> vars22(1, 0);
+  vars22[0] = 0;
+  // float range = (float) height / (float) (1.2 * ());
+  float r1 = coor_y + height / (1.2 * scale_tb) * eval(fs, vars22), r2;
+  for (int x = 0; x < width - 2; ++x)
+  {
+    vars22[0] = (float)x / 100;
+    r2 = coor_y + height / (1.2 * scale_tb) * eval(fs, vars22);
+    // cout << r1 << endl;
+    if (0 < (int) r1 && (int)r1 < height - 1 && 0 < r2 && (int)r2 < height - 1)
+      WuDrawLine(img, white, (float)x, r1, (float)(x + 1), r2);
+    r1 = r2;
+  }
+
+  img.write("original.png");
 };
+
+// ln(|x|) -> abs, ! 1 / x
