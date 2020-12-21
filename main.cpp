@@ -8,6 +8,8 @@ typedef long long int number;
 typedef unsigned long long int u_number;
 const decimal decimal_epsilon = numeric_limits<decimal>::epsilon();
 
+// hint: use exceptions instead of assert()
+
 #pragma region Tokenizer
 enum TokenKind
 {
@@ -42,16 +44,6 @@ struct Token
   Token(TokenKind k, string str) : kind(TokenVar), name(str){};
 
   friend ostream &operator<<(ostream &os, const Token &t);
-
-  Token(const Token &t)
-  {
-    kind = t.kind;
-    if (t.kind == TokenValue)
-      value = t.value;
-    else if (t.kind == TokenVar)
-      name = t.name;
-  };
-  ~Token(){};
 };
 
 ostream &operator<<(ostream &os, const Token &t)
@@ -535,9 +527,14 @@ enum NodeKind
   NodeSin,
   NodeCos,
   NodeTan,
+  NodeLn,
   NodeLog,
   NodeCon
 };
+
+struct Node;
+
+typedef unique_ptr<Node> NodePtr;
 
 struct Node
 {
@@ -549,43 +546,45 @@ struct Node
   string varName;
 
   // log(a, b) -> ln(4) == log(e, 4)
-  unique_ptr<Node> a /* base */, b /* value */;
-  bool a_var, b_var; // true if in sub-tree a / b variable is used
+  NodePtr a /* base */, b /* value */;
+  bool a_var, b_var; // true if in sub-tree a or b variable is used
 
   friend ostream &operator<<(ostream &os, const Node &t);
 
   Node(NodeKind kind1, decimal val) : kind(kind1), value(val), a_var(false), b_var(false){};
-  Node(int vardId1, string varName1) : kind(NodeVar), varId(vardId1), varName(varName1), a_var(false), b_var(false){};
-  Node(NodeKind kind1, unique_ptr<Node> a1) : kind(kind1), a(move(a1)), a_var(false), b_var(false){};
-  Node(NodeKind kind1, unique_ptr<Node> a1, unique_ptr<Node> b1) : kind(kind1), a(move(a1)), b(move(b1)), a_var(false), b_var(false){};
+  Node(int vardId1, string varName1) : kind(NodeVar), varId(vardId1), varName(varName1), a_var(true), b_var(true){};
+  Node(NodeKind kind1, NodePtr a1) : kind(kind1), a(move(a1)), a_var(a.get()->a_var || a.get()->b_var), b_var(false){};
+  Node(NodeKind kind1, NodePtr a1, NodePtr b1) : kind(kind1), a(move(a1)), b(move(b1)), a_var(a.get()->a_var || a.get()->b_var), b_var(b.get()->a_var || b.get()->b_var){};
 };
-
-typedef unique_ptr<Node> NodePtr;
 
 inline decimal rad(decimal val) { return val * M_PI / 180; }
 inline decimal deg(decimal val) { return val * 180 / M_PI; }
 
-NodePtr to_node(decimal value) { return make_unique<Node>(NodeValue, value); }
-NodePtr const_e() { return make_unique<Node>(NodeCon, M_E); }
-NodePtr const_pi() { return make_unique<Node>(NodeCon, M_PI); }
+inline NodePtr to_node(decimal value) { return make_unique<Node>(NodeValue, value); }
+inline NodePtr const_e() { return make_unique<Node>(NodeCon, M_E); }
+inline NodePtr const_pi() { return make_unique<Node>(NodeCon, M_PI); }
 
-NodePtr operator+(NodePtr a, NodePtr b) { return make_unique<Node>(Node(NodeAdd, move(a), move(b))); }
-NodePtr operator-(NodePtr a, NodePtr b) { return make_unique<Node>(Node(NodeSub, move(a), move(b))); }
-NodePtr operator*(NodePtr a, NodePtr b) { return make_unique<Node>(Node(NodeMul, move(a), move(b))); }
-NodePtr operator/(NodePtr a, NodePtr b) { return make_unique<Node>(Node(NodeDiv, move(a), move(b))); }
-NodePtr operator^(NodePtr a, NodePtr b) { return make_unique<Node>(Node(NodePow, move(a), move(b))); }
-NodePtr variable(int varId, string varName) { return make_unique<Node>(varId, varName); }
-NodePtr sin(NodePtr a) { return make_unique<Node>(NodeSin, move(a)); }
-NodePtr cos(NodePtr a) { return make_unique<Node>(NodeCos, move(a)); }
-NodePtr tan(NodePtr a) { return make_unique<Node>(NodeTan, move(a)); }
-NodePtr log(NodePtr a, NodePtr b) { return make_unique<Node>(NodeLog, move(a), move(b)); }
+inline NodePtr operator+(NodePtr a, NodePtr b) { return make_unique<Node>(Node(NodeAdd, move(a), move(b))); }
+inline NodePtr operator-(NodePtr a, NodePtr b) { return make_unique<Node>(Node(NodeSub, move(a), move(b))); }
+inline NodePtr operator*(NodePtr a, NodePtr b) { return make_unique<Node>(Node(NodeMul, move(a), move(b))); }
+inline NodePtr operator/(NodePtr a, NodePtr b) { return make_unique<Node>(Node(NodeDiv, move(a), move(b))); }
+inline NodePtr operator^(NodePtr a, NodePtr b) { return make_unique<Node>(Node(NodePow, move(a), move(b))); }
+inline NodePtr log(NodePtr a, NodePtr b) { return make_unique<Node>(NodeLog, move(a), move(b)); }
+inline NodePtr sin(NodePtr a) { return make_unique<Node>(NodeSin, move(a)); }
+inline NodePtr cos(NodePtr a) { return make_unique<Node>(NodeCos, move(a)); }
+inline NodePtr tan(NodePtr a) { return make_unique<Node>(NodeTan, move(a)); }
+inline NodePtr ln(NodePtr a) { return make_unique<Node>(NodeLn, move(a)); }
+inline NodePtr variable(int varId, string varName) { return make_unique<Node>(varId, varName); }
 // NodePtr log(NodePtr a) { return make_unique<Node>(NodeLog, a, 10); }
-NodePtr ln(NodePtr a) { return make_unique<Node>(NodeLog, const_e(), move(a)); }
 // NodePtr sqrt(NodePtr a) { return make_unique<Node>(NodePow, a, 0.5); }
 
-bool operator==(const NodePtr &a, const decimal &f) { return a.get()->kind == NodeValue && a.get()->value == f; }
+inline bool operator==(const NodePtr &a, const NodeKind &k) { return a.get()->kind == k; }
 
-bool operator==(const decimal &f, const NodePtr &a) { return a.get()->kind == NodeValue && a.get()->value == f; }
+inline bool operator==(const NodeKind &k, const NodePtr &a) { return a.get()->kind == k; }
+
+inline bool operator==(const NodePtr &a, const decimal &f) { return a.get()->kind == NodeValue && a.get()->value == f; }
+
+inline bool operator==(const decimal &f, const NodePtr &a) { return a.get()->kind == NodeValue && a.get()->value == f; }
 
 bool operator==(const NodePtr &a, const NodePtr &b)
 {
@@ -609,18 +608,30 @@ bool operator==(const NodePtr &a, const NodePtr &b)
   case NodeSin:
   case NodeCos:
   case NodeTan:
+  case NodeLn:
     return a.get()->a == b.get()->a;
   }
   assert(0 && "error");
   return false;
 }
 
+inline bool operator!=(const NodePtr &a, const NodeKind &k) { return !(a == k); }
+
+inline bool operator!=(const NodeKind &k, const NodePtr &a) { return !(k == a); }
+
+inline bool operator!=(const NodePtr &a, const decimal &f) { return !(a == f); }
+
+inline bool operator!=(const decimal &f, const NodePtr &a) { return !(f == a); }
+
+inline bool operator!=(const NodePtr &a, const NodePtr &b) { return !(a == b); }
+
 inline bool is_const_e(decimal val) { return fabs(val - M_E) <= decimal_epsilon; }
+
 inline bool is_const_pi(decimal val) { return fabs(val - M_PI) <= decimal_epsilon; }
 
+// #define ALWAYS_CLIPS
 ostream &stringify(ostream &os, const Node &t, int level)
 {
-  level = 10;
   switch (t.kind)
   {
   case NodeCon:
@@ -629,19 +640,16 @@ ostream &stringify(ostream &os, const Node &t, int level)
     else if (is_const_pi(t.value))
       os << "pi";
     else
-      assert(0 && "unknown Constant");
+      assert(0 && "unknown const");
     break;
   case NodeValue:
     if (t.value < 0)
-      os << "(";
-
-    if (t.value == floor(t.value))
-      os << floor(t.value);
+      os << "(" << t.value << ")";
     else
       os << t.value;
-
-    if (t.value < 0)
-      os << ")";
+    break;
+  case NodeVar:
+    os << t.varName;
     break;
   case NodeAdd:
     if (level > 1)
@@ -665,68 +673,6 @@ ostream &stringify(ostream &os, const Node &t, int level)
     if (level > 1)
       os << ")";
     break;
-  case NodeMul:
-    if (level > 2)
-      os << "(";
-
-    // proversorisch, dringend ueberarbeiten
-    if (t.a == -1)
-    {
-      os << "-";
-      stringify(os, *t.b.get(), 2);
-    }
-    else if (t.b == -1)
-    {
-      os << "-";
-      stringify(os, *t.a.get(), 2);
-    }
-    else if (t.b.get()->kind == NodeVar && t.a.get()->kind != NodeVar)
-    {
-      stringify(os, *t.a.get(), 1);
-      stringify(os, *t.b.get(), 1);
-    }
-    else if (t.a.get()->kind == NodeVar && t.b.get()->kind != NodeVar)
-    {
-      stringify(os, *t.b.get(), 1);
-      stringify(os, *t.a.get(), 1);
-    }
-    else if (t.a.get()->kind == NodeValue && (t.b.get()->kind == NodeCon || t.b.get()->kind == NodeSin || t.b.get()->kind == NodeCos || t.b.get()->kind == NodeLog))
-    {
-      stringify(os, *t.a.get(), 1);
-      stringify(os, *t.b.get(), 1);
-    }
-    else if (t.b.get()->kind == NodeValue && (t.a.get()->kind == NodeCon || t.a.get()->kind == NodeSin || t.a.get()->kind == NodeCos || t.a.get()->kind == NodeLog))
-    {
-      stringify(os, *t.b.get(), 1);
-      stringify(os, *t.a.get(), 1);
-    }
-    else if ((t.a.get()->kind == NodeCon || t.a.get()->kind == NodeSin || t.a.get()->kind == NodeCos || t.a.get()->kind == NodeLog) && (t.b.get()->kind == NodeCon || t.b.get()->kind == NodeSin || t.b.get()->kind == NodeCos || t.b.get()->kind == NodeLog))
-    {
-      stringify(os, *t.a.get(), 1);
-      stringify(os, *t.b.get(), 1);
-    }
-    else
-    {
-      stringify(os, *t.a.get(), 2);
-      os << " * ";
-      stringify(os, *t.b.get(), 2);
-    }
-
-    if (level > 2)
-      os << ")";
-    break;
-  case NodeDiv:
-    if (level > 2)
-      os << "(";
-
-    stringify(os, *t.a.get(), 2);
-    os << " / ";
-    stringify(os, *t.b.get(), 2);
-
-    if (level > 2)
-      os << ")";
-
-    break;
   case NodeSin:
     os << "sin(";
     stringify(os, *t.a.get(), 1);
@@ -742,42 +688,89 @@ ostream &stringify(ostream &os, const Node &t, int level)
     stringify(os, *t.a.get(), 1);
     os << ")";
     break;
+  case NodeLn:
+    os << "ln(";
+    stringify(os, *t.a.get(), 1);
+    os << ")";
+    break;
   case NodeLog:
+    os << "log(";
+    stringify(os, *t.a.get(), 1);
+    os << ", ";
+    stringify(os, *t.b.get(), 1);
+    os << ")";
+    break;
+  case NodeMul:
+// level = 10;
+#ifndef ALWAYS_CLIPS
     if (level > 2)
+#endif
       os << "(";
 
-    if (is_const_e(t.a.get()->value))
+    // proversorisch, dringend ueberarbeiten
+    if (t.a == -1)
     {
-      os << "ln(";
-      stringify(os, *t.b.get(), 1);
-      os << ")";
+      os << "-";
+      stringify(os, *t.b.get(), 2);
+    }
+    else if (t.b == -1)
+    {
+      os << "-";
+      stringify(os, *t.a.get(), 2);
+    }
+    else if ((t.b == NodeVar && t.a != NodeVar) || (t.a == NodeValue && (t.b == NodeCon || t.b == NodeSin || t.b == NodeCos || t.b == NodeLog)) || ((t.a == NodeCon || t.a == NodeSin || t.a == NodeCos || t.a == NodeLog) && (t.b == NodeCon || t.b == NodeSin || t.b == NodeCos || t.b == NodeLog)))
+    {
+      stringify(os, *t.a.get(), 2); // or 1 ???
+      stringify(os, *t.b.get(), 2); // or 1 ???
+    }
+    else if ((t.a == NodeVar && t.b != NodeVar) || (t.b == NodeValue && (t.a == NodeCon || t.a == NodeSin || t.a == NodeCos || t.a == NodeLog)))
+    {
+      stringify(os, *t.b.get(), 2); // or 1 ???
+      stringify(os, *t.a.get(), 2); // or 1 ???
     }
     else
     {
-      os << "log(";
-      stringify(os, *t.a.get(), 1);
-      os << ", ";
-      stringify(os, *t.b.get(), 1);
-      os << ")";
+      stringify(os, *t.a.get(), 2);
+      os << " * ";
+      stringify(os, *t.b.get(), 2);
     }
 
+#ifndef ALWAYS_CLIPS
     if (level > 2)
+#endif
       os << ")";
-
     break;
-  case NodePow:
+  case NodeDiv:
+    // level = 10;
+#ifndef ALWAYS_CLIPS
     if (level > 2)
+#endif
       os << "(";
 
     stringify(os, *t.a.get(), 3);
-    os << " ^ ";
+    os << " / ";
     stringify(os, *t.b.get(), 3);
 
+#ifndef ALWAYS_CLIPS
     if (level > 2)
+#endif
       os << ")";
     break;
-  case NodeVar:
-    os << t.varName;
+  case NodePow:
+    // level = 10;
+#ifndef ALWAYS_CLIPS
+    if (level > 2)
+#endif
+      os << "(";
+
+    stringify(os, *t.a.get(), 4);
+    os << " ^ ";
+    stringify(os, *t.b.get(), 4);
+
+#ifndef ALWAYS_CLIPS
+    if (level > 2)
+#endif
+      os << ")";
     break;
   }
   return os;
@@ -847,25 +840,25 @@ NodePtr parse(TokenIter &iter, map<string, int> &vars, bool next_negated, int le
   else if (iter.take(TokenLn))
   {
     assert(iter.take(TokenOpen) && "failed parsing");
-    result = make_unique<Node>(NodeLog, const_e(), parse(iter, vars, false));
+    result = ln(parse(iter, vars, false));
     assert(iter.take(TokenClose) && "failed parsing");
   }
   else if (iter.take(TokenSin))
   {
     assert(iter.take(TokenOpen) && "failed parsing");
-    result = make_unique<Node>(NodeSin, parse(iter, vars, false));
+    result = sin(parse(iter, vars, false));
     assert(iter.take(TokenClose) && "failed parsing");
   }
   else if (iter.take(TokenCos))
   {
     assert(iter.take(TokenOpen) && "failed parsing");
-    result = make_unique<Node>(NodeCos, parse(iter, vars, false));
+    result = cos(parse(iter, vars, false));
     assert(iter.take(TokenClose) && "failed parsing");
   }
   else if (iter.take(TokenTan))
   {
     assert(iter.take(TokenOpen) && "failed parsing");
-    result = make_unique<Node>(NodeTan, parse(iter, vars, false));
+    result = tan(parse(iter, vars, false));
     assert(iter.take(TokenClose) && "failed parsing");
   }
   else if (iter.take(TokenLog))
@@ -873,7 +866,7 @@ NodePtr parse(TokenIter &iter, map<string, int> &vars, bool next_negated, int le
     assert(iter.take(TokenOpen) && "failed parsing");
     NodePtr tmp = parse(iter, vars, false);
     assert(iter.take(TokenComma) && "failed parsing");
-    result = make_unique<Node>(NodeLog, move(tmp), parse(iter, vars, false));
+    result = log(move(tmp), parse(iter, vars, false));
     assert(iter.take(TokenClose) && "failed parsing");
   }
   else if (iter.take(TokenVar))
@@ -888,12 +881,12 @@ NodePtr parse(TokenIter &iter, map<string, int> &vars, bool next_negated, int le
     {
       map<string, int>::iterator it = vars.find(name);
       if (it != vars.end())
-        result = make_unique<Node>(it->second, name);
+        result = variable(it->second, name);
       else
       {
         size_t index = vars.size();
         vars.emplace(name, index);
-        result = make_unique<Node>(index, name);
+        result = variable(index, name);
       }
     }
   }
@@ -910,7 +903,7 @@ NodePtr parse(TokenIter &iter, map<string, int> &vars, bool next_negated, int le
   assert(result && "should be a error ???");
 
   if (next_negated)
-    result = make_unique<Node>(NodeMul, to_node(-1), move(result));
+    result = to_node(-1) * move(result);
 
   while (iter.take(TokenAdd) || iter.take(TokenSub) || iter.take(TokenMul) || iter.take(TokenDiv) || iter.take(TokenPot))
   {
@@ -971,6 +964,8 @@ decimal eval(const NodePtr &ptr_node, const vector<decimal> &vars)
     return cos(eval(node->a, vars));
   case NodeTan:
     return tan(eval(node->a, vars));
+  case NodeLn:
+    return log(eval(node->a, vars));
   case NodeLog:
     return log(eval(node->b, vars)) / log(eval(node->a, vars));
   case NodeVar:
@@ -1005,6 +1000,8 @@ NodePtr copy2(const NodePtr &p)
     return cos(copy2(p.get()->a));
   case NodeTan:
     return tan(copy2(p.get()->a));
+  case NodeLn:
+    return ln(copy2(p.get()->a));
   case NodeLog:
     return log(copy2(p.get()->a), copy2(p.get()->b));
   case NodeCon:
@@ -1020,34 +1017,6 @@ NodePtr copy(const NodePtr &p)
   c.get()->a_var = p.get()->a_var;
   c.get()->b_var = p.get()->b_var;
   return c;
-}
-
-bool preprocessing(const NodePtr &ptr)
-{
-  switch (ptr.get()->kind)
-  {
-  case NodeVar:
-    return true;
-  case NodeValue:
-  case NodeCon:
-    return false;
-  case NodeAdd:
-  case NodeSub:
-  case NodeMul:
-  case NodeDiv:
-  case NodePow:
-  case NodeLog:
-    ptr.get()->a_var = preprocessing(ptr.get()->a);
-    ptr.get()->b_var = preprocessing(ptr.get()->b);
-    return ptr.get()->a_var || ptr.get()->b_var;
-  case NodeSin:
-  case NodeCos:
-  case NodeTan:
-    ptr.get()->a_var = preprocessing(ptr.get()->a);
-    return ptr.get()->a_var;
-  }
-  assert(0 && "error");
-  return false;
 }
 
 // derive and (partly) simplify a function
@@ -1100,18 +1069,38 @@ NodePtr derive(const NodePtr &ptr_node, int varID) // varID according to which i
         return (to_node(-1) * (derive(node->a, varID) / copy(node->a)) * ln(copy(node->b))) / (ln(copy(node->a)) ^ to_node(2));
     }
     else
-    {
-      if (node->b_var)
-        return (node->a.get()->kind == NodeCon && is_const_e(node->a.get()->value)) ? derive(node->b, varID) / copy(node->b) : derive(node->b, varID) / (copy(node->b) * ln(copy(node->a)));
-      else
-        return to_node(0);
-    }
+      return (node->b_var) ? derive(node->b, varID) / (copy(node->b) * ln(copy(node->a))) : to_node(0);
   }
+  case NodeLn:
+    return (node->a_var) ? derive(node->a, varID) / copy(node->a) : to_node(0);
   case NodeVar:
     return to_node(node->varId == varID);
   }
   assert(0 && "error");
   return nullptr;
+}
+
+void flatten(NodePtr node, NodeKind node_kind, vector<NodePtr> &nds)
+{
+  if (node.get()->kind == node_kind)
+  {
+    flatten(move(node.get()->a), node_kind, nds);
+    flatten(move(node.get()->b), node_kind, nds);
+  }
+  else
+    nds.push_back(move(node));
+}
+
+void flatten(NodePtr node, vector<NodePtr> &nds) { return flatten(move(node), node.get()->kind, nds); }
+
+NodePtr unflatten(vector<NodePtr> terms, NodeKind node_kind)
+{
+  NodePtr cur = move(terms[0]);
+
+  for (int i = 1; i < terms.size(); ++i)
+    if (node_kind == NodeAdd || node_kind == NodeSub || node_kind == NodeMul || node_kind == NodeDiv || node_kind == NodePow)
+      cur = make_unique<Node>(node_kind, move(cur), move(terms[i]));
+  return cur;
 }
 
 NodePtr simplify(const NodePtr &ptr_node)
@@ -1131,54 +1120,63 @@ NodePtr simplify(const NodePtr &ptr_node)
     return cos(simplify(node->a));
   case NodeTan:
     return tan(simplify(node->a));
-  case NodeLog:
-  {
-    NodePtr a = simplify(node->a); // base
-    NodePtr b = simplify(node->b); // value
-    if (b == 0)
-      assert(0 && "log undefines for this value");
-    else if (b == 1)
-      return to_node(0);
-    else if (a == b)
-      return to_node(1);
-    return log(move(a), move(b));
-  }
-  case NodeMul:
-  {
-    NodePtr a = simplify(node->a);
-    NodePtr b = simplify(node->b);
-
-    if ((a == 0) || (b == 0))
-      return to_node(0);
-    else if (a == 1)
-      return b;
-    else if (b == 1)
-      return a;
-    else if (a.get()->kind == NodeValue && b.get()->kind == NodeValue)
-      return to_node(a.get()->value * b.get()->value);
-    return move(a) * move(b);
-  }
   case NodePow:
   {
     NodePtr a = simplify(node->a);
     NodePtr b = simplify(node->b);
-    if (a.get()->kind == NodeValue)
-    {
-      if (a.get()->value == 0)
-        return to_node(0);
-      else if (a.get()->value == 1)
-        return to_node(1);
-    }
-    if (b.get()->kind == NodeValue)
+    if (a == 1)
+      return to_node(1);
+    if (b == NodeValue)
     {
       if (b.get()->value == 0)
         return to_node(1);
       else if (b.get()->value == 1)
         return a;
     }
-    if (a.get()->kind == NodePow)
-      return simplify(move(a.get()->a) ^ move(a.get()->b) * move(b));
+    if (a == NodePow) // (a0 ^ a1) ^ b = a0 ^ (a1 * b)
+      return simplify(move(a.get()->a) ^ (move(a.get()->b) * move(b)));
     return move(a) ^ move(b);
+  }
+  case NodeLog:
+  {
+    NodePtr a = simplify(node->a); // base
+    NodePtr b = simplify(node->b); // value
+    if (b == 0)
+      assert(0 && "log undefined for this value");
+    else if (b == 1)
+      return to_node(0);
+    else if (a == b)
+      return to_node(1);
+    return log(move(a), move(b));
+  }
+  case NodeLn:
+  {
+    NodePtr b = simplify(node->b); // value
+    if (b == 0)
+      assert(0 && "ln undefined for this value");
+    else if (b == 1)
+      return to_node(0);
+    return ln(move(b));
+  }
+  case NodeMul:
+  {
+    NodePtr a = simplify(node->a);
+    NodePtr b = simplify(node->b);
+
+    if (a == 0 || b == 0)
+      return to_node(0);
+    else if (a == 1)
+      return b;
+    else if (b == 1)
+      return a;
+    else if (a == NodeValue && b == NodeValue)
+      return to_node(a.get()->value * b.get()->value);
+    else if (a == b)
+      return simplify(move(a) ^ to_node(2));
+
+    // if (a == NodeValue && b == NodeMul)
+
+    return move(a) * move(b);
   }
   case NodeAdd:
   {
@@ -1194,7 +1192,7 @@ NodePtr simplify(const NodePtr &ptr_node)
   {
     NodePtr a = simplify(node->a);
     NodePtr b = simplify(node->b);
-    if (a.get()->kind == NodeValue && b.get()->kind == NodeValue)
+    if (a == NodeValue && b == NodeValue)
       return to_node(a.get()->value - b.get()->value);
     else if (b == 0)
       return a;
@@ -1248,13 +1246,12 @@ NodePtr stern_brocot_tree(decimal x, const int limit = 15, const decimal accurac
 
 // input 2e -> 2 * e : mal ergaenzen
 // Schreibweise "sin 4" anstatt "sin(4)" testen
-// Operatorenschreibweise
 
 int main()
 {
   ios::sync_with_stdio(false);
   cin.tie(0);
-  cout << setprecision(15);
+  cout << setprecision(8);
 
   // Wann lohnt es sich eine Referenz / den Wert zu übergeben?
   // for-schleife auto oder size_t
@@ -1265,13 +1262,33 @@ int main()
   // auto t = chrono::duration_cast<chrono::nanoseconds>(end - start);
   // cout << t.count() << "ns" << endl;
 
+  NodePtr p1 = to_node(7) + to_node(11);
+  vector<NodePtr> vc;
+  // let terms = node.flatten().map(simplify)
+
+  // var
+  //     value_sum: float64 = 0
+  //     rest: seq[Node] = @[]
+  // for term in terms:
+  //     case term.kind:
+  //         of NodeValue:
+  //             value_sum += term.value
+  //         else:
+  //             rest.add(term)
+  // if value_sum != 0 or rest.len == 0:
+  //     rest.add(value_sum.value())
+
+  // return rest.unflatten(NodeAdd)
+  for (auto &item : vc)
+    cout << item << endl;
+
   decimal val = 2.7;
   string input;
   map<string, int> vars;
 
   // input = "-2(-x+1)x(x-1)(4x)*zy+variableX7";
   // input = "-1+7*(3-2)+2*sin(0.2)*log(4,5)";
-  // input = "-(-4-5*x--2)+7*(3-2)+2*sin(0.2)*log(4,5)"; //(x+1)";
+  input = "-(-4-5*x--2)+7*(3-2)+2*sin(0.2)*log(4,5)*(x-1)"; //(x+1)";
   // input = "x^7";
   // input = "x / sin(x)";
   // input = "log(2,x)";
@@ -1285,13 +1302,16 @@ int main()
   // input = "3x";
   // input = "sin(x) * cos(x)";
   // input = "tan(x^2)";
-  input = "log(2, (1 - 3 * x))";
+  // input = "log(2, 1 - 3 * x)";
 
+  auto start = chrono::system_clock::now();
   NodePtr f = parse(input, vars);
   NodePtr fs = simplify(f);
-  preprocessing(fs);
   NodePtr d = derive(fs, vars.find("x")->second);
   NodePtr s1 = simplify(d);
+  auto end = chrono::system_clock::now();
+  auto t = chrono::duration_cast<chrono::microseconds>(end - start);
+  cout << (double)t.count() / 1000 << " ms" << endl;
 
   vector<decimal> vars2(vars.size(), 0);
   for (auto &item : vars2)
