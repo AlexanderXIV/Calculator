@@ -1376,14 +1376,254 @@ decimal deriveAt(const NodePtr &ptr_node, vector<decimal> &vars, int varId, cons
   vars[varId] += 1e-8;
   return 1e8 * (eval(ptr_node, vars) - num1);
 }
+
+struct range
+{
+  decimal min_val, max_val;
+  range(decimal l1, decimal u1) : min_val(l1), max_val(u1){}; // l1, u1 inclusive
+  friend ostream &operator<<(ostream &os, const range &r);
+};
+
+ostream &operator<<(ostream &os, const range &r)
+{
+  os << "[" << r.min_val << ", " << r.max_val << "]";
+  return os;
+}
+
+range getLimits(const NodePtr &ptr_node)
+{
+  switch (ptr_node.get()->kind)
+  {
+  case NodeVar:
+    return range(-INFINITY, INFINITY);
+  case NodeSin:
+  {
+    range a = getLimits(ptr_node.get()->a);
+    if (abs(a.max_val - a.min_val) < 2 * M_PI)
+    {
+      int s1 = (int)(a.min_val / (2 * M_PI));
+      if (a.min_val < 0)
+        --s1;
+      a.min_val -= s1 * 2 * M_PI;
+      a.max_val -= s1 * 2 * M_PI;
+
+      if (a.min_val < 0.5 * M_PI)
+      {
+        if (a.max_val < 0.5 * M_PI)
+          return range(sin(a.min_val), sin(a.max_val));
+        else if (a.max_val < 1.5 * M_PI)
+          return range(min(sin(a.min_val), sin(a.max_val)), 1);
+      }
+      else if (a.min_val < 1.5 * M_PI)
+      {
+        if (a.max_val < 1.5 * M_PI)
+          return range(sin(a.max_val), sin(a.min_val));
+        else if (a.max_val < 2.5 * M_PI)
+          return range(-1, max(sin(a.max_val), sin(a.min_val)));
+      }
+      else
+      {
+        if (a.max_val < 2.5 * M_PI)
+          return range(sin(a.min_val), sin(a.max_val));
+        else if (a.max_val < 3.5 * M_PI)
+          return range(min(sin(a.min_val), sin(a.max_val)), 1);
+      }
+    }
+    return range(-1, 1);
+  }
+  case NodeCos:
+  {
+    range a = getLimits(ptr_node.get()->a);
+    if (abs(a.max_val - a.min_val) < 2 * M_PI)
+    {
+      int s1 = (int)(a.min_val / (2 * M_PI));
+      if (a.min_val < 0)
+        --s1;
+      a.min_val -= s1 * 2 * M_PI;
+      a.max_val -= s1 * 2 * M_PI;
+
+      if (a.min_val < M_PI)
+      {
+        if (a.max_val < M_PI)
+          return range(cos(a.max_val), cos(a.min_val));
+        else if (a.max_val < 2 * M_PI)
+          return range(-1, max(cos(a.max_val), cos(a.min_val)));
+      }
+      else
+      {
+        if (a.max_val < 2 * M_PI)
+          return range(cos(a.min_val), cos(a.max_val));
+        else if (a.max_val < 3 * M_PI)
+          return range(min(cos(a.min_val), cos(a.max_val)), 1);
+      }
+    }
+    return range(-1, 1);
+  }
+  case NodeTan:
+  {
+    range a = getLimits(ptr_node.get()->a);
+    if (abs(a.max_val - a.min_val) < M_PI)
+    {
+      int s1 = (int)(a.min_val / M_PI);
+      if (a.min_val < 0)
+        --s1;
+      a.min_val -= s1 * M_PI;
+      a.max_val -= s1 * M_PI;
+
+      if (a.min_val > 0.5 * M_PI || (a.min_val < 0.5 * M_PI && a.max_val < 0.5 * M_PI))
+        return range(atan(a.min_val), atan(a.max_val));
+      else if (a.min_val < 0.5 * M_PI && a.max_val > 0.5 * M_PI)
+        return range(atan(a.max_val), atan(a.min_val));
+    }
+    return range(-INFINITY, INFINITY);
+  }
+  case NodeAsin:
+  {
+    range a = getLimits(ptr_node.get()->a);
+    bool a1 = -1 <= a.min_val,
+         b1 = a.max_val <= 1;
+
+    if (a1 && b1)
+      return range(asin(a.min_val), asin(a.max_val));
+    else if (a1 && a.min_val <= 1)
+      return range(asin(a.min_val), M_PI / 2);
+    else if (b1 && -1 <= a.max_val)
+      return range(-M_PI / 2, asin(a.max_val));
+    else if (!(a1 || b1))
+      return range(-M_PI / 2, M_PI / 2);
+    else
+      assert(0 && "Value out of domain for trigonometric function");
+  }
+  case NodeAcos:
+  {
+    range a = getLimits(ptr_node.get()->a);
+    bool a1 = -1 <= a.min_val,
+         b1 = a.max_val <= 1;
+
+    if (a1 && b1)
+      return range(acos(a.max_val), acos(a.min_val));
+    else if (a1 && a.min_val <= 1)
+      return range(0, acos(a.min_val));
+    else if (b1 && -1 <= a.max_val)
+      return range(acos(a.max_val), M_PI);
+    else if (!(a1 || b1))
+      return range(0, M_PI);
+    else
+      assert(0 && "Value out of domain for trigonometric function");
+  }
+  case NodeAtan:
+  {
+    range a = getLimits(ptr_node.get()->a);
+    return range(atan(a.min_val), atan(a.max_val));
+  }
+  case NodeValue:
+    return range(ptr_node.get()->value, ptr_node.get()->value);
+  case NodeCon:
+    return range(ptr_node.get()->value, ptr_node.get()->value);
+  case NodeLn:
+  {
+    range a = getLimits(ptr_node.get()->a);
+    if (a.min_val > 0)
+      return range(log(a.min_val), log(a.max_val));
+    else if (a.max_val > 0)
+      return range(-INFINITY, log(a.max_val));
+    else
+      assert(0 && "Value out of domain for logarithm");
+  }
+  case NodeAdd:
+  {
+    range a = getLimits(ptr_node.get()->a);
+    range b = getLimits(ptr_node.get()->b);
+    return range(a.min_val + b.min_val, a.max_val + b.max_val);
+  }
+  case NodeSub:
+  {
+    range a = getLimits(ptr_node.get()->a);
+    range b = getLimits(ptr_node.get()->b);
+    return range(a.min_val - b.max_val, a.max_val - b.min_val);
+  }
+  case NodeMul:
+  {
+    range a = getLimits(ptr_node.get()->a);
+    range b = getLimits(ptr_node.get()->b);
+    return range(min(a.min_val * b.max_val, a.max_val * b.min_val), max(a.min_val * b.min_val, a.max_val * b.max_val));
+  }
+  case NodeLog:
+    return getLimits(ln(copy(ptr_node.get()->b)) / ln(copy(ptr_node.get()->a))); // inefficient
+  case NodeDiv:
+    break;
+  // {
+  //   range a = getLimits(ptr_node.get()->a);
+  //   range b = getLimits(ptr_node.get()->b);
+  //   return range(min(a.min_val * b.max_val, a.max_val * b.min_val), max(a.min_val * b.min_val, a.max_val * b.max_val));
+  // }
+  case NodePow: // a ^ b
+    break;
+  }
+  assert(0 && "error");
+  return range(0, 0);
+}
 #pragma endregion
 
 // input 2e -> 2 * e : mal ergaenzen
 // Schreibweise "sin 4" anstatt "sin(4)" testen
 
 #pragma region Visualisation
-void WuDrawLine(png::image<png::rgb_pixel_16> &img, const png::rgb_pixel_16 &col, float x0, float y0, float x1, float y1)
+void WuDrawLine(png::image<png::rgb_pixel_16> &img, const png::rgb_pixel_16 &col, int center_x, int center_y, float x0, float y0, float x1, float y1)
 {
+  assert(x0 <= x1);
+  assert(y0 <= y1);
+
+  int w = 1910, h = 1070;
+  y0 = img.get_height() - y0;
+  y1 = img.get_height() - y1;
+
+  center_x = 500;
+  center_y = 500;
+
+  // cout << x0 << " " << y0 << "\t\t" << x1 << " " << y1 << endl;
+
+  x0 = x0 + center_x;
+  x1 = x1 + center_x;
+
+  y0 = y0 - center_y;
+  y1 = y1 - center_y;
+
+  if (x0 == x1 && (x0 < 0 || x0 > w))
+    return;
+
+  // cout << x0 << " " << y0 << "\t\t" << x1 << " " << y1 << endl;
+
+  if (x0 < 0)
+  {
+    y0 = y0 - x0 * ((y1 - y0) / (x1 - x0));
+    x0 = 0;
+  }
+  else if (x0 > w)
+    return;
+
+  // cout << x0 << " " << y0 << "\t\t" << x1 << " " << y1 << endl;
+
+  if (x1 < 0)
+    return;
+  else if (x1 > w)
+  {
+    float a = (y1 - y0) / (x1 - x0);
+    y1 = a * w + y0 - x0 * a;
+    x1 = w;
+  }
+
+  if (y0 < 0)
+    return;
+  else if (x1 > w)
+  {
+    float a = (y1 - y0) / (x1 - x0);
+    y1 = a * w + y0 - x0 * a;
+    x1 = w;
+  }
+
+  // cout << x0 << " " << y0 << "\t\t" << x1 << " " << y1 << endl;
+
   auto plot = [](png::image<png::rgb_pixel_16> &img, const png::rgb_pixel_16 &col, int x, int y, float brightness) -> void { img.set_pixel(x, y, png::rgb_pixel_16(col.red * brightness, col.green * brightness, col.blue * brightness)); };
   auto ipart = [](float x) -> int { return int(std::floor(x)); };
   auto round = [](float x) -> float { return std::round(x); };
@@ -1461,6 +1701,107 @@ void WuDrawLine(png::image<png::rgb_pixel_16> &img, const png::rgb_pixel_16 &col
       intery += gradient;
     }
 }
+
+struct Graph
+{
+  int width, height;
+  float window_left, window_right, window_top, window_bottom;
+  png::image<png::rgb_pixel_16> img;
+
+  Graph(int width1, int height1, float window_left1, float window_right1, float window_bottom1, float window_top1) : img(width, height), width(width1), height(height1), window_left(window_left1),
+                                                                                                                     window_right(window_right1), window_top(window_top1), window_bottom(window_bottom1)
+  {
+    assert(width > 100 && "min. resolution");
+    assert(height > 100 && "min. resolution");
+    assert(1 < window_right - window_left && "min. window size");
+    assert(1 < window_top - window_bottom && "min. window size");
+  }
+
+  void drawFunction(const NodePtr &f, const png::rgb_pixel_16 &col = png::rgb_pixel_16((uint16_t)(UINT16_MAX), (uint16_t)(UINT16_MAX), (uint16_t)(UINT16_MAX)))
+  {
+    float w = (float)width, h = (float)height;
+
+    float scale_tb = window_top - window_bottom;
+    float scale_lr = window_right - window_left;
+    float coor_x = w - (w - 1) * window_top / scale_tb;
+    float coor_y = (h - 1) * window_right / scale_lr;
+
+    WuDrawLine(img, col, 0, 0, 0, -100, 0, 100);
+    WuDrawLine(img, col, 0, 0, -100, 0, 100, 0);
+    // if (window_left > 0)
+    //   WuDrawLine(img, col, coor_x, 0, coor_x, h - 1);
+    // else if (window_right < 0)
+    //   WuDrawLine(img, col, coor_x, 0, coor_x, h - 1);
+    // else
+    //   WuDrawLine(img, col, coor_x, 0, coor_x, h - 1);
+    // WuDrawLine(img, col, 0, coor_y, w - 1, coor_y);
+    // for (size_t i = 0; i < scale_lr - 1; i++)
+    // {
+    //   float h = 90 * i;
+    //   WuDrawLine(img, col, coor_x - 10, h, coor_x + 10, h);
+    // }
+    // for (size_t i = 0; i < scale_tb - 1; i++)
+    // {
+    //   float h = 180 * i;
+    //   WuDrawLine(img, col, h, coor_y - 10, h, coor_y + 10);
+    // }
+
+    // vector<decimal> vars22(1, 0);
+    // vars22[0] = window_left;
+    // float fac1 = height / (1.2 * scale_tb);
+    // float r1 = coor_y - fac1 * eval(f, vars22), r2;
+    // for (int x = 1; x < width - 1; ++x)
+    // {
+    //   vars22[0] = window_left + (scale_tb * (float)x) / (float)width;
+    //   r2 = coor_y - fac1 * eval(f, vars22);
+    //   if (0 < (int)r1 && (int)r1 < height - 1 && 0 < r2 && (int)r2 < height - 1)
+    //     WuDrawLine(img, col, (float)x, r1, (float)(x + 1), r2);
+    //   r1 = r2;
+    // }
+  }
+
+  void save(string name)
+  {
+    img.write(name);
+  }
+};
+// void drawGraph(png::image<png::rgb_pixel_16> &img, png::rgb_pixel_16 col, NodePtr &f, float window_left, float window_right, float window_bottom, float window_top) {
+//   int widht = img.get_width();
+//   png::rgb_pixel_16 white((uint16_t)(UINT16_MAX), (uint16_t)(UINT16_MAX), (uint16_t)(UINT16_MAX));
+//   png::rgb_pixel_16 red((uint16_t)(UINT16_MAX), 0, (uint16_t)(UINT16_MAX / 2));
+
+//   float scale_tb = window_top - window_bottom;
+//   float scale_lr = window_right - window_left;
+//   float coor_x = (float)width - (float)(width - 1) * window_top / scale_tb;
+//   float coor_y = (float)(height - 1) * window_right / scale_lr;
+//   WuDrawLine(img, white, coor_x, 0, coor_x, height - 1);
+//   WuDrawLine(img, white, 0, coor_y, width - 1, coor_y);
+//   for (size_t i = 0; i < scale_lr - 1; i++)
+//   {
+//     float h = 90 * i;
+//     WuDrawLine(img, white, coor_x - 10, h, coor_x + 10, h);
+//   }
+//   for (size_t i = 0; i < scale_tb - 1; i++)
+//   {
+//     float h = 180 * i;
+//     WuDrawLine(img, white, h, coor_y - 10, h, coor_y + 10);
+//   }
+
+//   vector<decimal> vars22(1, 0);
+//   vars22[0] = window_left;
+//   float fac1 = height / (1.2 * scale_tb);
+//   float r1 = coor_y - fac1 * eval(f, vars22), r2;
+//   for (int x = 1; x < width - 1; ++x)
+//   {
+//     vars22[0] = window_left + (scale_tb * (float)x) / (float)width;
+//     r2 = coor_y - fac1 * eval(f, vars22);
+//     if (0 < (int)r1 && (int)r1 < height - 1 && 0 < r2 && (int)r2 < height - 1)
+//       WuDrawLine(img, white, (float)x, r1, (float)(x + 1), r2);
+//     r1 = r2;
+//   }
+
+//   img.write(name);
+// }
 #pragma endregion
 
 int main()
@@ -1535,7 +1876,8 @@ int main()
   // error, should be asin(x)
 
   // input = "asin((1 - x^2) / (1 + x^2)";
-  input = "tan(ln(x))";
+  // input = "tan(ln(x))";
+  input = "sin(x) * sin(x)+3";
   // input = "sin(x)";
   // input = "(2x) / (1 + x^2)"; // 2x / (...) ???
 
@@ -1557,42 +1899,17 @@ int main()
        << "f'(x) = " << d << endl
        << "      = " << s1 << " (simplified)" << endl
        << "f(" << val << ") = " << eval(fs, vars2) << endl
-       << "f'(" << val << ") = " << eval(d, vars2) << endl;
+       << "f'(" << val << ") = " << eval(d, vars2) << endl
+       << "f limits: " << getLimits(f) << endl;
 
   ios::sync_with_stdio(false);
   cin.tie(0);
   cout << setprecision(8);
 
-  int height = 1080;
-  int width = 1920;
-  // int window_left = -0.5, window_right = 10, window_bottom = -7, window_top = 4;
-  float window_left = -0.5, window_right = 10, window_bottom = -0.5, window_top = 10;
-
-  png::image<png::rgb_pixel_16> img(width, height);
-  png::rgb_pixel_16 white((uint16_t)(UINT16_MAX), (uint16_t)(UINT16_MAX), (uint16_t)(UINT16_MAX));
-  png::rgb_pixel_16 red((uint16_t)(UINT16_MAX), 0, (uint16_t)(UINT16_MAX / 2));
-
-  float scale_tb = window_top - window_bottom;
-  float scale_lr = window_right - window_left;
-  float coor_x = (float) width - (float)(width - 1) * window_top / scale_tb;
-  float coor_y = (float)(height - 1) * window_right / scale_lr;
-  WuDrawLine(img, white, coor_x, 0, coor_x, height - 1);
-  WuDrawLine(img, white, 0, coor_y, width - 1, coor_y);
-  vector<decimal> vars22(1, 0);
-  vars22[0] = 0;
-  // float range = (float) height / (float) (1.2 * ());
-  float r1 = coor_y + height / (1.2 * scale_tb) * eval(fs, vars22), r2;
-  for (int x = 0; x < width - 2; ++x)
-  {
-    vars22[0] = (float)x / 100;
-    r2 = coor_y + height / (1.2 * scale_tb) * eval(fs, vars22);
-    // cout << r1 << endl;
-    if (0 < (int) r1 && (int)r1 < height - 1 && 0 < r2 && (int)r2 < height - 1)
-      WuDrawLine(img, white, (float)x, r1, (float)(x + 1), r2);
-    r1 = r2;
-  }
-
-  img.write("original.png");
+  // Graph g(1920, 1080, -0.5, 10, -0.5, 10);
+  Graph g(1920, 1080, 3, 10, 3, 10);
+  g.drawFunction(f);
+  g.save("graph.png");
 };
 
 // ln(|x|) -> abs, ! 1 / x
