@@ -1,6 +1,32 @@
-#include <bits/stdc++.h>
-#include <png++/png.hpp>
-using namespace std;
+#include <iostream> // cin, cout, endl
+#include <iomanip>  // setprecision
+#include <cmath>    // min, max
+#include <string>   // string
+#include <vector>   // vector
+#include <chrono>
+#include <map>
+#include <algorithm>
+#include <functional>
+
+#include <png++/image.hpp>
+#include <png++/rgb_pixel.hpp>
+
+using std::abs;
+using std::cin;
+using std::cout;
+using std::endl;
+using std::make_unique;
+using std::map;
+using std::max;
+using std::min;
+using std::ostream;
+using std::string;
+using std::swap;
+using std::vector;
+using std::pair;
+using std::make_pair;
+using std::tuple;
+using std::make_tuple;
 
 #define watch(x) cout << #x << " is " << x << endl
 
@@ -13,7 +39,7 @@ using namespace std;
 typedef long double decimal;
 typedef long long int number;
 typedef unsigned long long int u_number;
-const decimal decimal_epsilon = numeric_limits<decimal>::epsilon();
+const decimal decimal_epsilon = std::numeric_limits<decimal>::epsilon();
 
 // hint: use exceptions instead of assert()
 // hint: Performance over code redundancy
@@ -184,9 +210,8 @@ Token make_token(const string &str)
   return Token(TokenValue, str);
 }
 
-vector<Token> tokenize(string str)
+void tokenize(string str, vector<Token> &result)
 {
-  vector<Token> result;
   string cur = "";
   for (char chr : str)
   {
@@ -231,7 +256,6 @@ vector<Token> tokenize(string str)
 
   if (!cur.empty())
     result.push_back(make_token(cur));
-  return result;
 }
 #pragma endregion
 
@@ -422,12 +446,12 @@ number my_pow(number x, number n)
 
 decimal two_even_Bernoulli_number(number n)
 {
-  decimal v = 2 * my_faculty(2 * n) / (decimal)pow(2 * M_PI, 2 * n);
+  decimal v = 2 * my_faculty(2 * n) / (decimal)pow(2 * M_PI, 2 * (double)n);
   if (!(n & 1))
     v = -v;
   decimal res = 0;
   for (auto i = 1; i < 30; ++i)
-    res += 1 / (decimal)pow(i, 2 * n);
+    res += 1 / (decimal)pow(i, 2 * (double)n);
   return v * res;
 }
 
@@ -569,7 +593,7 @@ enum NodeKind
 
 struct Node;
 
-typedef unique_ptr<Node> NodePtr;
+typedef std::unique_ptr<Node> NodePtr;
 
 struct Node
 {
@@ -666,9 +690,9 @@ inline bool operator!=(const decimal &f, const NodePtr &a) { return !(f == a); }
 
 inline bool operator!=(const NodePtr &a, const NodePtr &b) { return !(a == b); }
 
-inline bool is_const_e(decimal val) { return fabs(val - M_E) <= decimal_epsilon; }
+inline bool is_const_e(decimal val) { return abs(val - (decimal)M_E) <= decimal_epsilon; }
 
-inline bool is_const_pi(decimal val) { return fabs(val - M_PI) <= decimal_epsilon; }
+inline bool is_const_pi(decimal val) { return abs(val - (decimal)M_PI) <= decimal_epsilon; }
 
 inline bool is_const_e(const NodePtr &a) { return a.get()->kind == NodeCon && is_const_e(a.get()->value); }
 
@@ -970,7 +994,7 @@ NodePtr parse(TokenIter &iter, map<string, int> &vars, bool next_negated, int le
       {
         size_t index = vars.size();
         vars.emplace(name, index);
-        result = variable(index, name);
+        result = variable((int)index, name);
       }
     }
   }
@@ -1016,7 +1040,9 @@ NodePtr parse(TokenIter &iter, map<string, int> &vars, bool next_negated, int le
 
 NodePtr parse(string str, map<string, int> &vars)
 {
-  TokenIter iter = TokenIter(tokenize(str), 0);
+  vector<Token> result;
+  tokenize(str, result);
+  TokenIter iter = TokenIter(result, 0);
   return parse(iter, vars, false);
 }
 
@@ -1038,23 +1064,23 @@ decimal eval(const NodePtr &ptr_node, const vector<decimal> &vars)
   case NodeDiv:
     return eval(node->a, vars) / eval(node->b, vars);
   case NodePow:
-    return pow(eval(node->a, vars), eval(node->b, vars));
+    return pow((double)eval(node->a, vars), (double)eval(node->b, vars));
   case NodeSin:
-    return sin(eval(node->a, vars));
+    return sin((double)eval(node->a, vars));
   case NodeCos:
-    return cos(eval(node->a, vars));
+    return cos((double)eval(node->a, vars));
   case NodeTan:
-    return tan(eval(node->a, vars));
+    return tan((double)eval(node->a, vars));
   case NodeAsin:
-    return asin(eval(node->a, vars));
+    return asin((double)eval(node->a, vars));
   case NodeAcos:
-    return acos(eval(node->a, vars));
+    return acos((double)eval(node->a, vars));
   case NodeAtan:
-    return atan(eval(node->a, vars));
+    return atan((double)eval(node->a, vars));
   case NodeLn:
-    return log(eval(node->a, vars));
+    return log((double)eval(node->a, vars));
   case NodeLog:
-    return log(eval(node->b, vars)) / log(eval(node->a, vars));
+    return log((double)eval(node->b, vars)) / log((double)eval(node->a, vars));
   case NodeVar:
     assert((size_t)node->varId <= vars.size() && "Variable gibt es nicht");
     return vars[node->varId];
@@ -1194,7 +1220,7 @@ void flatten(NodePtr node, NodeKind node_kind, vector<NodePtr> &nds)
 
 void flatten(NodePtr node, vector<NodePtr> &nds) { return flatten(move(node), node.get()->kind, nds); }
 
-NodePtr unflatten(vector<NodePtr> terms, NodeKind node_kind)
+NodePtr unflatten(vector<NodePtr> &terms, NodeKind node_kind)
 {
   NodePtr cur = move(terms[0]);
 
@@ -1218,23 +1244,35 @@ NodePtr simplify(const NodePtr &ptr_node)
   case NodeSin:
   {
     NodePtr a = simplify(node->a);
-    // if (a == NodeAsin)
-    //   return move(a.get()->a);
+    if (a == NodeAsin) // ATTENTION : should be definition area, value range
+      return move(a.get()->a);
+    else if (a == NodeAcos)
+      return sqrt(to_node(1) - move(a.get()->a) ^ to_node(2));
+    else if (a == NodeMul && a.get()->a == NodeValue && a.get()->a.get()->value == -1)
+      return to_node(-1) * sin(move(a.get()->b));
+    else if (a == NodeMul && a.get()->b == NodeValue && a.get()->b.get()->value == -1)
+      return to_node(-1) * sin(move(a.get()->a));
     return sin(move(a));
   }
-  case NodeCos:
-    return cos(simplify(node->a));
+  case NodeCos: // sqrt(1-f^2) == sin(arccos(f)) == cos(arcsin(f))
+  {
+    NodePtr a = simplify(node->a);
+    if (a == NodeAcos) // ATTENTION : should be definition area, value range
+      return move(a.get()->a);
+    else if (a == NodeAsin)
+      return sqrt(to_node(1) - move(a.get()->a) ^ to_node(2));
+    else if (a == NodeMul && a.get()->a == NodeValue && a.get()->a.get()->value == -1)
+      return cos(move(a.get()->b));
+    else if (a == NodeMul && a.get()->b == NodeValue && a.get()->b.get()->value == -1)
+      return cos(move(a.get()->a));
+    return cos(move(a));
+  }
   case NodeTan:
     return tan(simplify(node->a));
   case NodeAsin:
     return asin(simplify(node->a));
   case NodeAcos:
-  {
-    NodePtr a = simplify(node->a);
-    // if (a == NodeCos)
-    //   return move(a.get()->a);
-    return acos(move(a));
-  }
+    return acos(simplify(node->a));
   case NodeAtan:
     return atan(simplify(node->a));
   case NodePow:
@@ -1342,8 +1380,8 @@ NodePtr simplify(const NodePtr &ptr_node)
   return nullptr;
 }
 
-int digits_before_dot(decimal a) { return (a < 10) ? 1 : (int)log10(a); }
-int digits(decimal a) { return abs((int)log10(a)); }
+int digits_before_dot(decimal a) { return (a < 10) ? 1 : (int)log10((double)a); }
+int digits(decimal a) { return abs((int)log10((double)a)); }
 
 // could be more efficient
 NodePtr stern_brocot_tree(decimal x, const int limit = 15, const decimal accuracy = 10e-10)
@@ -1353,7 +1391,7 @@ NodePtr stern_brocot_tree(decimal x, const int limit = 15, const decimal accurac
   decimal original = x;
   for (number i = 0; i < limit; ++i)
   {
-    n = (number)floor(x);
+    n = (number)floor((double)x);
     x = 1 / (x - n);
 
     a = ap0 + n * ap1;
@@ -1363,24 +1401,24 @@ NodePtr stern_brocot_tree(decimal x, const int limit = 15, const decimal accurac
     ap1 = a;
     bp1 = b;
 
-    if (fabs((decimal)b / a - original) < accuracy)
+    if (abs((decimal)b / a - original) < accuracy)
       break;
   }
   return to_node(nn * a + b) / to_node(a);
   // return to_node(nn) * to_node(a) + to_node(b) / to_node(a);
 }
 
-decimal deriveAt(const NodePtr &ptr_node, vector<decimal> &vars, int varId, const int accuracy = 8)
+decimal deriveAt(const NodePtr &ptr_node, vector<decimal> &vars, int varId, const decimal accuracy = 1e8)
 {
   decimal num1 = eval(ptr_node, vars);
-  vars[varId] += 1e-8;
-  return 1e8 * (eval(ptr_node, vars) - num1);
+  vars[varId] += 1 / accuracy;
+  return accuracy * (eval(ptr_node, vars) - num1);
 }
 
 struct range
 {
-  decimal min_val, max_val;
-  range(decimal l1, decimal u1) : min_val(l1), max_val(u1){}; // l1, u1 inclusive
+  double min_val, max_val;
+  range(double l1, double u1) : min_val(l1), max_val(u1){}; // l1, u1 inclusive
   friend ostream &operator<<(ostream &os, const range &r);
 };
 
@@ -1517,9 +1555,9 @@ range getLimits(const NodePtr &ptr_node)
     return range(atan(a.min_val), atan(a.max_val));
   }
   case NodeValue:
-    return range(ptr_node.get()->value, ptr_node.get()->value);
+    return range((double)ptr_node.get()->value, (double)ptr_node.get()->value);
   case NodeCon:
-    return range(ptr_node.get()->value, ptr_node.get()->value);
+    return range((double)ptr_node.get()->value, (double)ptr_node.get()->value);
   case NodeLn:
   {
     range a = getLimits(ptr_node.get()->a);
@@ -1563,6 +1601,322 @@ range getLimits(const NodePtr &ptr_node)
   assert(0 && "error");
   return range(0, 0);
 }
+
+NodePtr inverse_var(const NodePtr &p, int varID)
+{
+  switch (p.get()->kind)
+  {
+  case NodeValue:
+    return to_node(p.get()->value);
+  case NodeAdd:
+    return inverse_var(p.get()->a, varID) + inverse_var(p.get()->b, varID);
+  case NodeMul:
+    return inverse_var(p.get()->a, varID) * inverse_var(p.get()->b, varID);
+  case NodeDiv:
+    return inverse_var(p.get()->a, varID) / inverse_var(p.get()->b, varID);
+  case NodeSub:
+    return inverse_var(p.get()->a, varID) - inverse_var(p.get()->b, varID);
+  case NodeVar:
+    return to_node(-1) * variable(p.get()->varId, p.get()->varName);
+  case NodePow:
+    return inverse_var(p.get()->a, varID) + inverse_var(p.get()->b, varID);
+  case NodeSin:
+    return sin(inverse_var(p.get()->a, varID));
+  case NodeCos:
+    return cos(inverse_var(p.get()->a, varID));
+  case NodeTan:
+    return tan(inverse_var(p.get()->a, varID));
+  case NodeAsin:
+    return asin(inverse_var(p.get()->a, varID));
+  case NodeAcos:
+    return acos(inverse_var(p.get()->a, varID));
+  case NodeAtan:
+    return atan(inverse_var(p.get()->a, varID));
+  case NodeLn:
+    return ln(inverse_var(p.get()->a, varID));
+  case NodeLog:
+    return log(inverse_var(p.get()->a, varID), inverse_var(p.get()->b, varID));
+  case NodeCon:
+    return copy(p);
+  }
+  assert(0 && "error");
+  return nullptr;
+}
+
+bool cmpr(const NodePtr &a, const NodePtr &b)
+{
+  // weitere Test mit bestimmten Werten?
+  // extrem ineffiecient -> simplify(copy(...))
+  return simplify(copy(a)) == simplify(copy(b));
+}
+
+// node_ptr should already be symplified
+bool axis_symmetic(const NodePtr &node_ptr, int varID)
+{ // f(x) == f(-x)
+  return cmpr(node_ptr, inverse_var(node_ptr, varID));
+}
+
+// node_ptr should already be symplified
+bool point_symmetic(const NodePtr &node_ptr, int varID)
+{ // f(x) == f(-x)
+  return cmpr(to_node(-1) * copy(node_ptr), inverse_var(node_ptr, varID));
+}
+
+bool brents_fun(std::function<double(double)> f, const double lower, const double upper, const double tol, const unsigned int max_iter, double &s)
+{
+  double a = lower;
+  double b = upper;
+  double fa = f(a); // calculated now to save function calls
+  double fb = f(b); // calculated now to save function calls
+  double fs = 0;    // initialize
+
+  assert(fa * fb < 0 && "Signs of f(lower_bound) and f(upper_bound) must be opposites");
+
+  if (abs(fa) < abs(b)) // if magnitude of f(lower_bound) is less than magnitude of f(upper_bound)
+  {
+    swap(a, b);
+    swap(fa, fb);
+  }
+
+  double c = a;      // c now equals the largest magnitude of the lower and upper bounds
+  double fc = fa;    // precompute function evalutation for point c by assigning it the same value as fa
+  bool mflag = true; // boolean flag used to evaluate if statement later on
+  s = 0;             // Our Root that will be returned
+  double d = 0;      // Only used if mflag is unset (mflag == false)
+
+  for (unsigned int iter = 1; iter < max_iter; ++iter)
+  {
+    // stop if converged on root or error is less than tolerance
+    if (abs(b - a) < tol)
+      return true;
+
+    if (fa != fc && fb != fc) // use inverse quadratic interopolation
+      s = (a * fb * fc / ((fa - fb) * (fa - fc))) + (b * fa * fc / ((fb - fa) * (fb - fc))) + (c * fa * fb / ((fc - fa) * (fc - fb)));
+    else // secant method
+      s = b - fb * (b - a) / (fb - fa);
+
+    // checks to see whether we can use the faster converging quadratic && secant methods or if we need to use bisection
+    if (((s < (3 * a + b) * 0.25) || (s > b)) ||
+        (mflag && (abs(s - b) >= (abs(b - c) * 0.5))) ||
+        (!mflag && (abs(s - b) >= (abs(c - d) * 0.5))) ||
+        (mflag && (abs(b - c) < tol)) ||
+        (!mflag && (abs(c - d) < tol)))
+    {
+      // bisection method
+      s = (a + b) * 0.5;
+      mflag = true;
+    }
+    else
+      mflag = false;
+
+    fs = f(s); // calculate fs
+    d = c;     // first time d is being used (wasnt used on first iteration because mflag was set)
+    c = b;     // set c equal to upper bound
+    fc = fb;   // set f(c) = f(b)
+
+    if (fa * fs < 0) // fa and fs have opposite signs
+    {
+      b = s;
+      fb = fs; // set f(b) = f(s)
+    }
+    else
+    {
+      a = s;
+      fa = fs; // set f(a) = f(s)
+    }
+
+    if (abs(fa) < abs(fb)) // if magnitude of fa is less than magnitude of fb
+    {
+      swap(a, b);   // swap a and b
+      swap(fa, fb); // make sure f(a) and f(b) are correct after swap
+    }
+  }
+
+  return false;
+}
+
+// returns number of roots found
+int find_all_roots(std::function<double(double)> f, const double lower, const double upper, const double tol, vector<double> &roots)
+{
+  // double value, next_tol,
+  //        last_val = abs(f(lower)),
+  //        last_tol = abs(last_val - tol);
+
+  // for (double x = lower + tol; x <= upper; x += tol)
+  // {
+  //   value = abs(f(x));
+  //   next_tol = abs(value - tol);
+  //   cout << x << ": " << last_val << "  " << (last_tol < next_tol) << endl;
+  //   if (last_val < tol && last_tol < next_tol)
+  //     roots.push_back(x);
+  //   last_tol = next_tol;
+  //   last_val = value;
+  // }
+
+  for (double x = lower; x <= upper; x += tol)
+    if (abs(abs(f(x - tol)) - abs(f(x))) < tol && abs(abs(f(x)) - abs(f(x + tol))) < tol && abs(f(x)) < tol)
+    {
+      roots.push_back(x);
+      cout << f(x - tol) << " " << f(x) << " " << f(x + tol) << endl;
+    }
+
+  return roots.size();
+}
+
+struct Complex
+{
+  bool is_kartesian;
+  decimal real, img;
+  Complex(decimal r, decimal i = 0, bool is_p = true) : real(r), img(i), is_kartesian(is_p){};
+
+  friend ostream &operator<<(ostream &os, const Token &t);
+
+  inline Complex operator+(const Complex &b)
+  {
+    assert(is_kartesian && "wrong format");
+    return Complex(real + b.real, img + b.img);
+  }
+
+  inline Complex operator-(const Complex &b)
+  {
+    assert(is_kartesian && "wrong format");
+    return Complex(real - b.real, img - b.img);
+  }
+
+  inline Complex operator*(const Complex &b)
+  {
+    assert(is_kartesian && "wrong format");
+    return Complex(real * b.real - img * b.img, real * b.img + img * b.real);
+  }
+
+  Complex operator/(const Complex &b)
+  {
+    assert(is_kartesian && "wrong format");
+    decimal d1 = b.real * b.real + b.img * b.img;
+    return Complex((real * b.real - img * b.img) / d1, (real * b.img + img * b.real) / d1);
+  }
+
+  void cartesian_to_polar()
+  {
+    assert(is_kartesian && "wrong format");
+    assert((img != 0 || real != 0) && "error, not a complex num");
+    is_kartesian = false;
+    decimal r = sqrt(real * real + img * img);
+    if (img >= 0)
+    {
+      if (real > 0)
+        img = atan(img / real);
+      else if (real < 0)
+        img = M_PI - abs(atan(img / real));
+    }
+    else if (real > 0)
+      img = M_PI + atan(img / real);
+    else if (real < 0)
+      img = 2 * M_PI - abs(atan(img / real));
+    real = r;
+  }
+
+  void polar_to_cartesian()
+  {
+    assert(!is_kartesian && "wrong format");
+    is_kartesian = true;
+    decimal r = real;
+    real *= cos(img);
+    img = r * sin(img);
+  }
+};
+
+// dringend ueberarbeiten
+// inline Complex operator+(const decimal &a, const Complex &b) { return Complex(a, 0) + b; }
+// inline Complex operator-(const decimal &a, const Complex &b) { return Complex(a, 0) - b; }
+// inline Complex operator*(const decimal &a, const Complex &b) { return Complex(a, 0) * b; }
+// inline Complex operator/(const decimal &a, const Complex &b) { return Complex(a, 0) / b; }
+// inline Complex operator+(const Complex &a, const decimal &b) { return a + Complex(b, 0); }
+// inline Complex operator-(const Complex &a, const decimal &b) { return a - Complex(b, 0); }
+// inline Complex operator*(const Complex &a, const decimal &b) { return a * Complex(b, 0); }
+// inline Complex operator/(const Complex &a, const decimal &b) { return a / Complex(b, 0); }
+
+pair<Complex, Complex> sqrt(Complex a)
+{
+  a.cartesian_to_polar();
+  a.is_kartesian = true;
+  decimal r = sqrt(a.real);
+  a.img *= 0.5;
+  a.real = r * cos(a.img);
+  a.img = r * sin(a.img);
+  return make_pair(a, Complex(-1 * a.real, -1 * a.img));
+}
+
+
+// std:: tpl;
+
+// std::get<0>(tpl) = 1;
+// std::get<1>(tpl) = 2;
+// std::get<2>(tpl) = 3;
+// tuple<int, int, int> cbrt(Complex a)
+// {
+//   a.cartesian_to_polar();
+//   a.is_kartesian = true;
+//   decimal r = cbrt(a.real);
+//   a.img /= 3;
+//   a.real = r * cos(a.img);
+//   a.img = r * sin(a.img);
+//   return make_pair(a, Complex(-1 * a.real, -1 * a.img));
+// }
+
+// vector<Complex> cbrt(Complex a)
+// {
+//   a.cartesian_to_polar();
+//   a.real = cbrt(a.real);
+//   a.img /= 3;
+//   a.polar_to_cartesian();
+//   return a;
+// }
+
+// vector<Complex> n_root(Complex a, int n)
+// {
+//   n = 1 / n;
+//   a.cartesian_to_polar();
+//   a.real = pow(a.real, n);
+//   a.img *= n;
+//   a.polar_to_cartesian();
+//   return a;
+// }
+
+ostream &operator<<(ostream &os, const Complex &c)
+{
+  if (c.real == 0)
+  {
+    if (c.img == 0)
+      os << '0';
+    else if (c.img == 1)
+      os << "i";
+    else if (c.img == -1)
+      os << "(-i)";
+    else
+      os << '(' << c.img << "i)";
+  }
+  else
+  {
+    if (c.img == 0)
+      os << '(' << c.real << ')' << endl;
+    else if (c.img == 1)
+      os << '(' << c.real << " + i)";
+    else if (c.img == -1)
+      os << '(' << c.real << " - i)";
+    else if (c.img < 0)
+      os << '(' << c.real << " - " << -1 * c.img << "i)";
+    else if (c.img > 0)
+      os << '(' << c.real << " + " << c.img << "i)";
+  }
+  return os;
+}
+
+// pair<Complex, Complex> abc(decimal a, decimal b, decimal c) {
+//   assert(a != 0 && "not abc Formula");
+//   auto d1 = sqrt(Complex(pow(b, 2) - 4 * a * c));
+//   return make_pair((-b + d1.first) / (2 * a), (-b - d1.second) / (2 * a));
+// }
 #pragma endregion
 
 // input 2e -> 2 * e : mal ergaenzen
@@ -1806,9 +2160,9 @@ struct Graph
 
 int main()
 {
-  ios::sync_with_stdio(false);
+  std::ios::sync_with_stdio(false);
   cin.tie(0);
-  cout << setprecision(8);
+  cout << std::setprecision(8);
 
   // Wann lohnt es sich eine Referenz / den Wert zu übergeben?
   // for-schleife auto oder size_t
@@ -1819,25 +2173,44 @@ int main()
   // auto t = chrono::duration_cast<chrono::nanoseconds>(end - start);
   // cout << t.count() << "ns" << endl;
 
-  // NodePtr p1 = to_node(7) + to_node(11);
-  // vector<NodePtr> vc;
-  // let terms = node.flatten().map(simplify)
+  double result;
+  if (brents_fun([](double x) { return (x * x * x - 3 * x * x + 2 * x); }, -1, 3, 1e-8, 1e4, result))
+    cout << "success: " << result;
+  else
+    cout << "failed";
+  cout << endl;
 
-  // var
-  //     value_sum: float64 = 0
-  //     rest: seq[Node] = @[]
-  // for term in terms:
-  //     case term.kind:
-  //         of NodeValue:
-  //             value_sum += term.value
-  //         else:
-  //             rest.add(term)
-  // if value_sum != 0 or rest.len == 0:
-  //     rest.add(value_sum.value())
+  vector<double> v11;
+  cout << find_all_roots([](double x) { return (x * x * x - 3 * x * x + 2 * x); }, -1, 3, 0.01, v11) << endl;
+  for (auto &e : v11)
+    cout << e << endl;
+  cout << endl;
 
-  // return rest.unflatten(NodeAdd)
+  NodePtr node = to_node(7) + to_node(11);
+  vector<NodePtr> terms;
+  flatten(move(node), terms);
+  for (auto &it : terms)
+    simplify(it);
+
+  decimal value_sum = 0;
+  vector<NodePtr> rest;
+  for (NodePtr &term : terms)
+    if (term == NodeValue)
+      value_sum += term.get()->value;
+    else
+      rest.push_back(move(term));
+  if (value_sum != 0 || rest.empty())
+    rest.push_back(to_node(value_sum));
+
+  NodePtr p12 = unflatten(rest, NodeAdd);
+  cout << p12 << endl;
   // for (auto &item : vc)
   //   cout << item << endl;
+
+  Complex aa(5, 3);  // = 5 + 3i
+  Complex b(1, -1); // = 1 - i
+  pair<Complex, Complex> z1 = sqrt(aa + Complex(1, -1));
+  cout << z1.first << " " << z1.second << endl;
 
   decimal val = 2.7;
   string input;
@@ -1877,17 +2250,19 @@ int main()
 
   // input = "asin((1 - x^2) / (1 + x^2)";
   // input = "tan(ln(x))";
-  input = "sin(x) * sin(x)+3";
-  // input = "sin(x)";
+  // input = "sin(x) * sin(x)+3";
+  // input = "sin(-(4+2x))";
+  input = "sin(acos(x))";
+  input = "acos(sin(x))";
   // input = "(2x) / (1 + x^2)"; // 2x / (...) ???
 
-  auto start = chrono::system_clock::now();
+  auto start = std::chrono::system_clock::now();
   NodePtr f = parse(input, vars);
   NodePtr fs = simplify(f);
   NodePtr d = derive(fs, vars.find("x")->second);
   NodePtr s1 = simplify(d);
-  auto end = chrono::system_clock::now();
-  auto t = chrono::duration_cast<chrono::microseconds>(end - start);
+  auto end = std::chrono::system_clock::now();
+  auto t = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
   cout << (double)t.count() / 1000 << " ms" << endl;
 
   vector<decimal> vars2(vars.size(), 0);
@@ -1900,11 +2275,10 @@ int main()
        << "      = " << s1 << " (simplified)" << endl
        << "f(" << val << ") = " << eval(fs, vars2) << endl
        << "f'(" << val << ") = " << eval(d, vars2) << endl
-       << "f limits: " << getLimits(f) << endl;
-
-  ios::sync_with_stdio(false);
-  cin.tie(0);
-  cout << setprecision(8);
+       << "f limits: " << getLimits(f) << endl // geht noch net
+       << "inverse f: " << inverse_var(f, 0) << endl
+       << "Achensymmetrisch: " << ((axis_symmetic(f, 0)) ? "yes" : "no / maybe") << endl
+       << "Punktsymmetrisch: " << ((point_symmetic(f, 0)) ? "yes" : "no / maybe") << endl;
 
   // Graph g(1920, 1080, -0.5, 10, -0.5, 10);
   Graph g(1920, 1080, 3, 10, 3, 10);
@@ -1913,3 +2287,4 @@ int main()
 };
 
 // ln(|x|) -> abs, ! 1 / x
+// https://www.dummies.com/wp-content/uploads/323191.image0.png
