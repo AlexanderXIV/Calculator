@@ -78,9 +78,9 @@ struct Token
   string name;
   // };
 
-  Token(TokenKind k) : kind(k){};
-  Token(TokenKind k, decimal val) : kind(TokenValue), value(val){};
-  Token(TokenKind k, string str) : kind(TokenVar), name(str){};
+  Token(TokenKind _kind) : kind(_kind){};
+  Token(TokenKind _kind, decimal _value) : kind(TokenValue), value(_value){};
+  Token(TokenKind _kind, string _name) : kind(TokenVar), name(_name){};
 
   friend ostream &operator<<(ostream &os, const Token &t);
 };
@@ -610,14 +610,14 @@ struct Node
 
   friend ostream &operator<<(ostream &os, const Node &t);
 
-  Node(NodeKind kind1, decimal val) : kind(kind1), value(val), a_var(false), b_var(false){};
-  Node(int vardId1, string varName1) : kind(NodeVar), varId(vardId1), varName(varName1), a_var(true), b_var(true){};
-  Node(NodeKind kind1, NodePtr a1) : kind(kind1), a(move(a1)), a_var(a.get()->a_var || a.get()->b_var), b_var(false){};
-  Node(NodeKind kind1, NodePtr a1, NodePtr b1) : kind(kind1), a(move(a1)), b(move(b1)), a_var(a.get()->a_var || a.get()->b_var), b_var(b.get()->a_var || b.get()->b_var){};
+  Node(NodeKind _kind, decimal _value) : kind(_kind), value(_value), a_var(false), b_var(false){};
+  Node(int _varId, string _varName) : kind(NodeVar), varId(_varId), varName(_varName), a_var(true), b_var(true){};
+  Node(NodeKind _kind, NodePtr _a) : kind(_kind), a(move(_a)), a_var(a.get()->a_var || a.get()->b_var), b_var(false){};
+  Node(NodeKind _kind, NodePtr _a, NodePtr _b) : kind(_kind), a(move(_a)), b(move(_b)), a_var(a.get()->a_var || a.get()->b_var), b_var(b.get()->a_var || b.get()->b_var){};
 };
 
-inline decimal rad(decimal val) { return val * M_PI / 180; }
-inline decimal deg(decimal val) { return val * 180 / M_PI; }
+inline decimal rad(decimal value) { return value * M_PI / 180; }
+inline decimal deg(decimal value) { return value * 180 / M_PI; }
 
 inline NodePtr to_node(decimal value) { return make_unique<Node>(NodeValue, value); }
 inline NodePtr const_e() { return make_unique<Node>(NodeCon, M_E); }
@@ -690,9 +690,9 @@ inline bool operator!=(const decimal &f, const NodePtr &a) { return !(f == a); }
 
 inline bool operator!=(const NodePtr &a, const NodePtr &b) { return !(a == b); }
 
-inline bool is_const_e(decimal val) { return abs(val - (decimal)M_E) <= decimal_epsilon; }
+inline bool is_const_e(decimal value) { return abs(value - (decimal)M_E) <= decimal_epsilon; }
 
-inline bool is_const_pi(decimal val) { return abs(val - (decimal)M_PI) <= decimal_epsilon; }
+inline bool is_const_pi(decimal value) { return abs(value - (decimal)M_PI) <= decimal_epsilon; }
 
 inline bool is_const_e(const NodePtr &a) { return a.get()->kind == NodeCon && is_const_e(a.get()->value); }
 
@@ -877,7 +877,7 @@ struct TokenIter
   size_t cur;
   vector<Token> tokens;
 
-  TokenIter(vector<Token> tokens1, size_t cur1) : cur(cur1), tokens(tokens1){};
+  TokenIter(vector<Token> _tokens, size_t _cur) : cur(_cur), tokens(_tokens){};
 
   bool next(const TokenKind kind) { return cur < tokens.size() && tokens[cur].kind == kind; }
 
@@ -1141,7 +1141,7 @@ NodePtr copy(const NodePtr &p)
 // derive and (partly) simplify a function
 // error: sqrt(x^2)' = x -> should be abs(x)
 // Todo: abs()
-NodePtr derive(const NodePtr &ptr_node, int varID) // varID according to which is derived
+NodePtr derive(const NodePtr &ptr_node, int varId) // varId according to which is derived
 {
   Node *node = ptr_node.get();
   switch (node->kind)
@@ -1151,57 +1151,57 @@ NodePtr derive(const NodePtr &ptr_node, int varID) // varID according to which i
     return to_node(0);
   case NodeAdd:
     if (node->a_var)
-      return (node->b_var) ? derive(node->a, varID) + derive(node->b, varID) : derive(node->a, varID);
+      return (node->b_var) ? derive(node->a, varId) + derive(node->b, varId) : derive(node->a, varId);
     else
-      return (node->b_var) ? derive(node->b, varID) : to_node(0);
+      return (node->b_var) ? derive(node->b, varId) : to_node(0);
   case NodeSub:
     if (node->a_var)
-      return (node->b_var) ? derive(node->a, varID) - derive(node->b, varID) : derive(node->a, varID);
+      return (node->b_var) ? derive(node->a, varId) - derive(node->b, varId) : derive(node->a, varId);
     else
-      return (node->b_var) ? to_node(-1) * derive(node->b, varID) : to_node(0);
+      return (node->b_var) ? to_node(-1) * derive(node->b, varId) : to_node(0);
   case NodeMul:
     if (node->a_var)
-      return (node->b_var) ? copy(node->a) * derive(node->b, varID) + derive(node->a, varID) * copy(node->b) : derive(node->a, varID) * copy(node->b);
+      return (node->b_var) ? copy(node->a) * derive(node->b, varId) + derive(node->a, varId) * copy(node->b) : derive(node->a, varId) * copy(node->b);
     else
-      return (node->b_var) ? copy(node->a) * derive(node->b, varID) : to_node(0);
+      return (node->b_var) ? copy(node->a) * derive(node->b, varId) : to_node(0);
   case NodeDiv:
     if (node->a_var)
-      return (node->b_var) ? (copy(node->b) * derive(node->a, varID) - derive(node->b, varID) * copy(node->a)) / (copy(node->b) ^ to_node(2)) : derive(node->a, varID) / copy(node->b);
+      return (node->b_var) ? (copy(node->b) * derive(node->a, varId) - derive(node->b, varId) * copy(node->a)) / (copy(node->b) ^ to_node(2)) : derive(node->a, varId) / copy(node->b);
     else
-      return (node->b_var) ? (to_node(-1) * derive(node->b, varID) * copy(node->a)) / (copy(node->b) ^ to_node(2)) : to_node(0);
+      return (node->b_var) ? (to_node(-1) * derive(node->b, varId) * copy(node->a)) / (copy(node->b) ^ to_node(2)) : to_node(0);
   case NodePow:
     if (node->a_var)
-      return (node->b_var) ? (ln(copy(node->a)) * derive(node->b, varID) + copy(node->b) / copy(node->a) * derive(node->a, varID)) * copy(ptr_node) : copy(node->b) * (copy(node->a) ^ (copy(node->b) - to_node(1)));
+      return (node->b_var) ? (ln(copy(node->a)) * derive(node->b, varId) + copy(node->b) / copy(node->a) * derive(node->a, varId)) * copy(ptr_node) : copy(node->b) * (copy(node->a) ^ (copy(node->b) - to_node(1)));
     else
-      return (node->b_var) ? ln(copy(node->a)) * derive(node->b, varID) * copy(ptr_node) : to_node(0);
+      return (node->b_var) ? ln(copy(node->a)) * derive(node->b, varId) * copy(ptr_node) : to_node(0);
   case NodeSin:
-    return (node->a_var) ? cos(copy(node->a)) * derive(node->a, varID) : to_node(0);
+    return (node->a_var) ? cos(copy(node->a)) * derive(node->a, varId) : to_node(0);
   case NodeCos:
-    return (node->a_var) ? to_node(-1) * sin(copy(node->a)) * derive(node->a, varID) : to_node(0);
+    return (node->a_var) ? to_node(-1) * sin(copy(node->a)) * derive(node->a, varId) : to_node(0);
   case NodeTan:
-    return (node->a_var) ? derive(node->a, varID) * ((tan(copy(node->a)) ^ to_node(2)) + to_node(1)) : to_node(0);
+    return (node->a_var) ? derive(node->a, varId) * ((tan(copy(node->a)) ^ to_node(2)) + to_node(1)) : to_node(0);
   case NodeAsin:
-    return derive(node->a, varID) / sqrt(to_node(1) - (copy(node->a) ^ to_node(2)));
+    return derive(node->a, varId) / sqrt(to_node(1) - (copy(node->a) ^ to_node(2)));
   case NodeAcos:
-    return (to_node(-1) * derive(node->a, varID)) / sqrt(to_node(1) - (copy(node->a) ^ to_node(2)));
+    return (to_node(-1) * derive(node->a, varId)) / sqrt(to_node(1) - (copy(node->a) ^ to_node(2)));
   case NodeAtan:
-    return derive(node->a, varID) / (to_node(1) + (copy(node->a) ^ to_node(2)));
+    return derive(node->a, varId) / (to_node(1) + (copy(node->a) ^ to_node(2)));
   case NodeLog: // Annahme : log a(b) == log(a, b)
   {
     if (node->a_var)
     {
       if (node->b_var)
-        return (ln(copy(node->a)) * (derive(node->b, varID) / copy(node->b)) - (derive(node->a, varID) / copy(node->a)) * ln(copy(node->b))) / (ln(copy(node->a)) ^ to_node(2));
+        return (ln(copy(node->a)) * (derive(node->b, varId) / copy(node->b)) - (derive(node->a, varId) / copy(node->a)) * ln(copy(node->b))) / (ln(copy(node->a)) ^ to_node(2));
       else
-        return (to_node(-1) * (derive(node->a, varID) / copy(node->a)) * ln(copy(node->b))) / (ln(copy(node->a)) ^ to_node(2));
+        return (to_node(-1) * (derive(node->a, varId) / copy(node->a)) * ln(copy(node->b))) / (ln(copy(node->a)) ^ to_node(2));
     }
     else
-      return (node->b_var) ? derive(node->b, varID) / (copy(node->b) * ln(copy(node->a))) : to_node(0);
+      return (node->b_var) ? derive(node->b, varId) / (copy(node->b) * ln(copy(node->a))) : to_node(0);
   }
   case NodeLn:
-    return (node->a_var) ? derive(node->a, varID) / copy(node->a) : to_node(0);
+    return (node->a_var) ? derive(node->a, varId) / copy(node->a) : to_node(0);
   case NodeVar:
-    return to_node(node->varId == varID);
+    return to_node(node->varId == varId);
   }
   assert(0 && "error");
   return nullptr;
@@ -1230,6 +1230,7 @@ NodePtr unflatten(vector<NodePtr> &terms, NodeKind node_kind)
   return cur;
 }
 
+#define EXPERIMENTAL_FEATURE
 NodePtr simplify(const NodePtr &ptr_node)
 {
   Node *node = ptr_node.get();
@@ -1351,6 +1352,24 @@ NodePtr simplify(const NodePtr &ptr_node)
       return b;
     else if (b == 0)
       return a;
+
+#ifdef EXPERIMENTAL_FEATURE
+    vector<NodePtr> terms;
+    flatten(move(a) + move(b), terms);
+
+    decimal value_sum = 0;
+    vector<NodePtr> rest;
+    for (NodePtr &term : terms)
+      if (term == NodeValue)
+        value_sum += term.get()->value;
+      else
+        rest.push_back(move(term));
+    if (value_sum != 0 || rest.empty())
+      rest.push_back(to_node(value_sum));
+
+    return unflatten(rest, NodeAdd);
+#endif
+
     return move(a) + move(b);
   }
   case NodeSub:
@@ -1602,40 +1621,40 @@ range getLimits(const NodePtr &ptr_node)
   return range(0, 0);
 }
 
-NodePtr inverse_var(const NodePtr &p, int varID)
+NodePtr inverse_var(const NodePtr &p, int varId)
 {
   switch (p.get()->kind)
   {
   case NodeValue:
     return to_node(p.get()->value);
   case NodeAdd:
-    return inverse_var(p.get()->a, varID) + inverse_var(p.get()->b, varID);
+    return inverse_var(p.get()->a, varId) + inverse_var(p.get()->b, varId);
   case NodeMul:
-    return inverse_var(p.get()->a, varID) * inverse_var(p.get()->b, varID);
+    return inverse_var(p.get()->a, varId) * inverse_var(p.get()->b, varId);
   case NodeDiv:
-    return inverse_var(p.get()->a, varID) / inverse_var(p.get()->b, varID);
+    return inverse_var(p.get()->a, varId) / inverse_var(p.get()->b, varId);
   case NodeSub:
-    return inverse_var(p.get()->a, varID) - inverse_var(p.get()->b, varID);
+    return inverse_var(p.get()->a, varId) - inverse_var(p.get()->b, varId);
   case NodeVar:
     return to_node(-1) * variable(p.get()->varId, p.get()->varName);
   case NodePow:
-    return inverse_var(p.get()->a, varID) + inverse_var(p.get()->b, varID);
+    return inverse_var(p.get()->a, varId) + inverse_var(p.get()->b, varId);
   case NodeSin:
-    return sin(inverse_var(p.get()->a, varID));
+    return sin(inverse_var(p.get()->a, varId));
   case NodeCos:
-    return cos(inverse_var(p.get()->a, varID));
+    return cos(inverse_var(p.get()->a, varId));
   case NodeTan:
-    return tan(inverse_var(p.get()->a, varID));
+    return tan(inverse_var(p.get()->a, varId));
   case NodeAsin:
-    return asin(inverse_var(p.get()->a, varID));
+    return asin(inverse_var(p.get()->a, varId));
   case NodeAcos:
-    return acos(inverse_var(p.get()->a, varID));
+    return acos(inverse_var(p.get()->a, varId));
   case NodeAtan:
-    return atan(inverse_var(p.get()->a, varID));
+    return atan(inverse_var(p.get()->a, varId));
   case NodeLn:
-    return ln(inverse_var(p.get()->a, varID));
+    return ln(inverse_var(p.get()->a, varId));
   case NodeLog:
-    return log(inverse_var(p.get()->a, varID), inverse_var(p.get()->b, varID));
+    return log(inverse_var(p.get()->a, varId), inverse_var(p.get()->b, varId));
   case NodeCon:
     return copy(p);
   }
@@ -1651,15 +1670,15 @@ bool cmpr(const NodePtr &a, const NodePtr &b)
 }
 
 // node_ptr should already be symplified
-bool axis_symmetic(const NodePtr &node_ptr, int varID)
+bool axis_symmetic(const NodePtr &node_ptr, int varId)
 { // f(x) == f(-x)
-  return cmpr(node_ptr, inverse_var(node_ptr, varID));
+  return cmpr(node_ptr, inverse_var(node_ptr, varId));
 }
 
 // node_ptr should already be symplified
-bool point_symmetic(const NodePtr &node_ptr, int varID)
+bool point_symmetic(const NodePtr &node_ptr, int varId)
 { // f(x) == f(-x)
-  return cmpr(to_node(-1) * copy(node_ptr), inverse_var(node_ptr, varID));
+  return cmpr(to_node(-1) * copy(node_ptr), inverse_var(node_ptr, varId));
 }
 
 bool brents_fun(std::function<double(double)> f, const double lower, const double upper, const double tol, const unsigned int max_iter, double &s)
@@ -1932,108 +1951,25 @@ pair<Complex, Complex> abc(decimal a, decimal b, decimal c)
 }
 #pragma endregion
 
-// input 2e -> 2 * e : mal ergaenzen
-// Schreibweise "sin 4" anstatt "sin(4)" testen
-
 #pragma region Visualisation
-void WuDrawLine(png::image<png::rgb_pixel_16> &img, const png::rgb_pixel_16 &col, int shift_x, int shift_y, float x0, float y0, float x1, float y1)
-{
-  y0 = img.get_height() - y0;
-  y1 = img.get_height() - y1;
-  auto plot = [](png::image<png::rgb_pixel_16> &img, const png::rgb_pixel_16 &col, int x, int y, float brightness, int shift_x, int shift_y) -> void {
-    x += shift_x;
-    y -= shift_y;
-    if (x > 0 && y > 0 && x < img.get_width() && y < img.get_height())
-      img.set_pixel(x, y, png::rgb_pixel_16(col.red * brightness, col.green * brightness, col.blue * brightness));
-  };
-  auto ipart = [](float x) -> int { return int(std::floor(x)); };
-  auto round = [](float x) -> float { return std::round(x); };
-  auto fpart = [](float x) -> float { return x - std::floor(x); };
-  auto rfpart = [=](float x) -> float { return 1 - fpart(x); };
+const int len_seperation_lines = 5;
 
-  const bool steep = abs(y1 - y0) > abs(x1 - x0);
-  if (steep)
-  {
-    std::swap(x0, y0);
-    std::swap(x1, y1);
-  }
-  if (x0 > x1)
-  {
-    std::swap(x0, x1);
-    std::swap(y0, y1);
-  }
-
-  const float dx = x1 - x0;
-  const float dy = y1 - y0;
-  const float gradient = (dx == 0) ? 1 : dy / dx;
-
-  int xpx11;
-  float intery;
-  {
-    const float xend = round(x0);
-    const float yend = y0 + gradient * (xend - x0);
-    const float xgap = rfpart(x0 + 0.5f);
-    xpx11 = int(xend);
-    const int ypx11 = ipart(yend);
-    if (steep)
-    {
-      plot(img, col, ypx11, xpx11, rfpart(yend) * xgap, shift_x, shift_y);
-      plot(img, col, ypx11 + 1, xpx11, fpart(yend) * xgap, shift_x, shift_y);
-    }
-    else
-    {
-      plot(img, col, xpx11, ypx11, rfpart(yend) * xgap, shift_x, shift_y);
-      plot(img, col, xpx11, ypx11 + 1, fpart(yend) * xgap, shift_x, shift_y);
-    }
-    intery = yend + gradient;
-  }
-
-  int xpx12;
-  {
-    const float xend = round(x1);
-    const float yend = y1 + gradient * (xend - x1);
-    const float xgap = rfpart(x1 + 0.5f);
-    xpx12 = int(xend);
-    const int ypx12 = ipart(yend);
-    if (steep)
-    {
-      plot(img, col, ypx12, xpx12, rfpart(yend) * xgap, shift_x, shift_y);
-      plot(img, col, ypx12 + 1, xpx12, fpart(yend) * xgap, shift_x, shift_y);
-    }
-    else
-    {
-      plot(img, col, xpx12, ypx12, rfpart(yend) * xgap, shift_x, shift_y);
-      plot(img, col, xpx12, ypx12 + 1, fpart(yend) * xgap, shift_x, shift_y);
-    }
-  }
-
-  if (steep)
-    for (int x = xpx11 + 1; x < xpx12; x++)
-    {
-      plot(img, col, ipart(intery), x, rfpart(intery), shift_x, shift_y);
-      plot(img, col, ipart(intery) + 1, x, fpart(intery), shift_x, shift_y);
-      intery += gradient;
-    }
-  else
-    for (int x = xpx11 + 1; x < xpx12; x++)
-    {
-      plot(img, col, x, ipart(intery), rfpart(intery), shift_x, shift_y);
-      plot(img, col, x, ipart(intery) + 1, fpart(intery), shift_x, shift_y);
-      intery += gradient;
-    }
-}
-
-const int len_seperation_lines = 10;
+#define MAX_VAL (uint16_t)(UINT16_MAX)
+#define RED png::rgb_pixel_16(MAX_VAL, 0, 0)
+#define GREEN png::rgb_pixel_16(0, MAX_VAL, 0)
+#define BLUE png::rgb_pixel_16(0, 0, MAX_VAL)
+#define YELLOW png::rgb_pixel_16(MAX_VAL, MAX_VAL, 0)
+#define CYAN png::rgb_pixel_16(0, MAX_VAL, MAX_VAL)
+#define MAGENTA png::rgb_pixel_16(MAX_VAL, 0, MAX_VAL)
+#define WHITE png::rgb_pixel_16(MAX_VAL, MAX_VAL, MAX_VAL)
 
 struct Graph
 {
-  int width, height;
-  float window_left, window_right, window_top, window_bottom;
   png::image<png::rgb_pixel_16> img;
-  int shift_x, shift_y;
+  int width, height, shift_x, shift_y;
+  float ratio_x, ratio_y;
 
-  Graph(int width1, int height1, float window_left1 = -10, float window_right1 = -10, float window_bottom1 = 10, float window_top1 = 10) : img(width, height), width(width1), height(height1), window_left(window_left1),
-                                                                                                                     window_right(window_right1), window_top(window_top1), window_bottom(window_bottom1)
+  Graph(int _width, int _height, float window_left, float window_right, float window_bottom, float window_top) : img(_width, _height), width(_width), height(_height)
   {
     assert(width > 100 && "min. resolution");
     assert(height > 100 && "min. resolution");
@@ -2043,39 +1979,184 @@ struct Graph
     assert(window_bottom < 0);
     assert(window_top > 0);
     assert(window_right > 0);
-    shift_x = (width * -window_left) / (double)(window_right - window_left);
-    shift_y = (height * -window_bottom) / (double)(window_top - window_bottom);
+
+    ratio_x = (float)width / (window_right - window_left);
+    ratio_y = (float)height / (window_top - window_bottom);
+    shift_x = -window_left * ratio_x;
+    shift_y = -window_bottom * ratio_y;
   }
 
-  void drawAxis(const png::rgb_pixel_16 &col = png::rgb_pixel_16((uint16_t)(UINT16_MAX), (uint16_t)(UINT16_MAX), (uint16_t)(UINT16_MAX)))
+  Graph(int _width, int _height, float window_left, float window_right, float window_bottom) : img(_width, _height), width(_width), height(_height)
   {
-    const int dist_seperation_lines_x = width / (double)(window_right - window_left);
-    const int dist_seperation_lines_y = height / (double)(window_top - window_bottom);
+    float window_top = (float)(height * (window_right - window_left)) / (float)width + window_bottom;
 
-    WuDrawLine(img, col, shift_x, shift_y, 0, -shift_y, 0, height - shift_y);
-    WuDrawLine(img, col, shift_x, shift_y, -shift_x, 0, width - shift_x, 0);
+    assert(width > 100 && "min. resolution");
+    assert(height > 100 && "min. resolution");
+    assert(1 < window_right - window_left && "min. window size");
+    assert(1 < window_top - window_bottom && "min. window size");
+    assert(window_left < 0);
+    assert(window_bottom < 0);
+    assert(window_top > 0);
+    assert(window_right > 0);
+
+    ratio_x = (float)width / (window_right - window_left);
+    ratio_y = (float)height / (window_top - window_bottom);
+    shift_x = -window_left * ratio_x;
+    shift_y = -window_bottom * ratio_y;
+  }
+
+  Graph(int _width, int _height, float window_left, float window_right) : img(_width, _height), width(_width), height(_height)
+  {
+    float window_top = (float)(height * (window_right - window_left)) / (float)(2 * width);
+
+    assert(width > 100 && "min. resolution");
+    assert(height > 100 && "min. resolution");
+    assert(1 < window_right - window_left && "min. window size");
+    assert(1 < 2 * window_top && "min. window size");
+    assert(window_left < 0);
+    assert(window_top > 0);
+    assert(window_right > 0);
+
+    ratio_x = (float)width / (window_right - window_left);
+    ratio_y = ratio_x;
+    shift_x = -window_left * ratio_x;
+    shift_y = (float)height / 2;
+  }
+
+  bool plot(const png::rgb_pixel_16 &col, int x, int y, const float brightness)
+  {
+    if (x > 0 && y > 0 && x < width && y < height)
+    {
+      png::rgb_pixel_16 old = img.get_pixel(x, y);
+      uint32_t r = old.red + col.red * brightness;
+      if (r > UINT16_MAX)
+        r = (uint16_t)(UINT16_MAX);
+      old.red = (uint16_t)r;
+      uint32_t g = old.green + col.green * brightness;
+      if (g > UINT16_MAX)
+        g = (uint16_t)(UINT16_MAX);
+      old.green = (uint16_t)g;
+      uint32_t b = old.blue + col.blue * brightness;
+      if (b > UINT16_MAX)
+        b = (uint16_t)(UINT16_MAX);
+      old.blue = (uint16_t)b;
+      img.set_pixel(x, y, old);
+      return true;
+    }
+    return false;
+  }
+
+  void WuDrawLine(const png::rgb_pixel_16 &col, float x0, float y0, float x1, float y1)
+  {
+    x0 += shift_x;
+    x1 += shift_x;
+    y0 = height - (y0 + shift_y);
+    y1 = height - (y1 + shift_y);
+
+    auto ipart = [](float x) -> int { return int(std::floor(x)); };
+    auto round = [](float x) -> float { return std::round(x); };
+    auto fpart = [](float x) -> float { return x - std::floor(x); };
+    auto rfpart = [=](float x) -> float { return 1 - fpart(x); };
+
+    const bool steep = abs(y1 - y0) > abs(x1 - x0);
+    if (steep)
+    {
+      std::swap(x0, y0);
+      std::swap(x1, y1);
+    }
+    if (x0 > x1)
+    {
+      std::swap(x0, x1);
+      std::swap(y0, y1);
+    }
+
+    const float dx = x1 - x0;
+    const float dy = y1 - y0;
+    const float gradient = (dx == 0) ? 1 : dy / dx;
+
+    int xpx11;
+    float intery;
+    {
+      const float xend = round(x0);
+      const float yend = y0 + gradient * (xend - x0);
+      const float xgap = rfpart(x0 + 0.5f);
+      xpx11 = int(xend);
+      const int ypx11 = ipart(yend);
+      if (steep)
+      {
+        plot(col, ypx11, xpx11, rfpart(yend) * xgap);
+        plot(col, ypx11 + 1, xpx11, fpart(yend) * xgap);
+      }
+      else
+      {
+        plot(col, xpx11, ypx11, rfpart(yend) * xgap);
+        plot(col, xpx11, ypx11 + 1, fpart(yend) * xgap);
+      }
+      intery = yend + gradient;
+    }
+
+    int xpx12;
+    {
+      const float xend = round(x1);
+      const float yend = y1 + gradient * (xend - x1);
+      const float xgap = rfpart(x1 + 0.5f);
+      xpx12 = int(xend);
+      const int ypx12 = ipart(yend);
+      if (steep)
+      {
+        plot(col, ypx12, xpx12, rfpart(yend) * xgap);
+        plot(col, ypx12 + 1, xpx12, fpart(yend) * xgap);
+      }
+      else
+      {
+        plot(col, xpx12, ypx12, rfpart(yend) * xgap);
+        plot(col, xpx12, ypx12 + 1, fpart(yend) * xgap);
+      }
+    }
+
+    if (steep)
+      for (int x = xpx11 + 1; x < xpx12; x++)
+      {
+        plot(col, ipart(intery), x, rfpart(intery));
+        plot(col, ipart(intery) + 1, x, fpart(intery));
+        intery += gradient;
+      }
+    else
+      for (int x = xpx11 + 1; x < xpx12; x++)
+      {
+        plot(col, x, ipart(intery), rfpart(intery));
+        plot(col, x, ipart(intery) + 1, fpart(intery));
+        intery += gradient;
+      }
+  }
+
+  void drawAxis(const png::rgb_pixel_16 &col = WHITE)
+  {
+    int dist_seperation_lines_x = ratio_x;
+    int dist_seperation_lines_y = ratio_y;
+
+    WuDrawLine(col, 0, -shift_y, 0, height - shift_y);
+    WuDrawLine(col, -shift_x, 0, width - shift_x, 0);
 
     for (int i = dist_seperation_lines_y; i < height - shift_y; i += dist_seperation_lines_y)
-      WuDrawLine(img, col, shift_x, shift_y, -len_seperation_lines, i, len_seperation_lines, i);
+      WuDrawLine(col, -len_seperation_lines, i, len_seperation_lines, i);
     for (int i = dist_seperation_lines_y; i >= -shift_y; i -= dist_seperation_lines_y)
-      WuDrawLine(img, col, shift_x, shift_y, -len_seperation_lines, i, len_seperation_lines, i);
+      WuDrawLine(col, -len_seperation_lines, i, len_seperation_lines, i);
     for (int i = dist_seperation_lines_x; i < width - shift_x; i += dist_seperation_lines_x)
-      WuDrawLine(img, col, shift_x, shift_y, i, -len_seperation_lines, i, len_seperation_lines);
+      WuDrawLine(col, i, -len_seperation_lines, i, len_seperation_lines);
     for (int i = dist_seperation_lines_x; i >= -shift_x; i -= dist_seperation_lines_x)
-      WuDrawLine(img, col, shift_x, shift_y, i, -len_seperation_lines, i, len_seperation_lines);
+      WuDrawLine(col, i, -len_seperation_lines, i, len_seperation_lines);
   }
 
-  void drawFunction(const NodePtr &f, const png::rgb_pixel_16 &col = png::rgb_pixel_16((uint16_t)(UINT16_MAX), (uint16_t)(UINT16_MAX), (uint16_t)(UINT16_MAX)))
+  void drawFunction(const NodePtr &f, int varId, vector<decimal> variables, const png::rgb_pixel_16 &col = WHITE)
   {
-    float fac1 = height / (1.2 * (window_top - window_bottom));
-    vector<decimal> vars22(1, 0);
-    vars22[0] = -shift_x / 100.0;
-    float r1 = fac1 * eval(f, vars22), r2;
+    variables[varId] = -shift_x / ratio_x;
+    float r2, r1 = ratio_y * (float)eval(f, variables);
     for (int x = -shift_x + 1; x < width - shift_x; ++x)
     {
-      vars22[0] = x / 100.0; // window_left + (scale_tb * (float)x) / (float)width;
-      float r2 = fac1 * eval(f, vars22);
-      WuDrawLine(img, col, shift_x, shift_y, (float)x, r1, (float)(x + 1), r2);
+      variables[varId] = x / ratio_x;
+      r2 = ratio_y * (float)eval(f, variables);
+      WuDrawLine(col, (float)x, r1, (float)(x + 1), r2);
       r1 = r2;
     }
   }
@@ -2087,11 +2168,22 @@ struct Graph
 };
 #pragma endregion
 
+long benchmark(std::function<void()> f)
+{
+  auto start = std::chrono::system_clock::now();
+  f();
+  auto end = std::chrono::system_clock::now();
+  return std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+}
+
 int main()
 {
   std::ios::sync_with_stdio(false);
   cin.tie(0);
   cout << std::setprecision(8);
+
+  // input 2e -> 2 * e : mal ergaenzen
+  // Schreibweise "sin 4" anstatt "sin(4)" testen
 
   // Wann lohnt es sich eine Referenz / den Wert zu übergeben?
   // for-schleife auto oder size_t
@@ -2114,27 +2206,6 @@ int main()
   for (auto &e : v11)
     cout << e << endl;
   cout << endl;
-
-  NodePtr node = to_node(7) + to_node(11);
-  vector<NodePtr> terms;
-  flatten(move(node), terms);
-  for (auto &it : terms)
-    simplify(it);
-
-  decimal value_sum = 0;
-  vector<NodePtr> rest;
-  for (NodePtr &term : terms)
-    if (term == NodeValue)
-      value_sum += term.get()->value;
-    else
-      rest.push_back(move(term));
-  if (value_sum != 0 || rest.empty())
-    rest.push_back(to_node(value_sum));
-
-  NodePtr p12 = unflatten(rest, NodeAdd);
-  cout << p12 << endl;
-  // for (auto &item : vc)
-  //   cout << item << endl;
 
   Complex aa(5, 3); // = 5 + 3i
   Complex b(1, -1); // = 1 - i
@@ -2189,14 +2260,10 @@ int main()
   input = "sin(x)";
   // input = "(2x) / (1 + x^2)"; // 2x / (...) ???
 
-  auto start = std::chrono::system_clock::now();
   NodePtr f = parse(input, vars);
   NodePtr fs = simplify(f);
   NodePtr d = derive(fs, vars.find("x")->second);
   NodePtr s1 = simplify(d);
-  auto end = std::chrono::system_clock::now();
-  auto t = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
-  cout << (double)t.count() / 1000 << " ms" << endl;
 
   vector<decimal> vars2(vars.size(), 0);
   for (auto &item : vars2)
@@ -2214,15 +2281,23 @@ int main()
        << "Punktsymmetrisch: " << ((point_symmetic(f, 0)) ? "yes" : "no / maybe") << endl;
 
   // Graph g(1920, 1080, -0.5, 10, -0.5, 10);
-  Graph g(1920, 1080, -3, 10, -3, 10);
-  g.drawAxis();
-  g.drawFunction(parse("sin(x)", vars), png::rgb_pixel_16((uint16_t)(UINT16_MAX), 0, 0));
-  g.drawFunction(parse("cos(x)", vars), png::rgb_pixel_16(0, (uint16_t)(UINT16_MAX), 0));
-  g.drawFunction(parse("tan(x)", vars), png::rgb_pixel_16(0, 0, (uint16_t)(UINT16_MAX)));
-  g.save("graph.png");
+  // Graph g(1920, 1080, -3, 10, -3, 10);
+  // Graph g(1920, 1080, -3, 10);
+  cout << "graph 1: " << benchmark([]() -> void { // ~271 ms
+    map<string, int> vars;
+    vector<decimal> vars2(1, 0);
+
+    Graph g(1920, 1080, -3, 10, -1.5);
+    g.drawAxis();
+    g.drawFunction(parse("x + 1", vars), 0, vars2, BLUE);
+    g.drawFunction(parse("sin(x)", vars), 0, vars2, RED);
+    g.drawFunction(parse("cos(x)", vars), 0, vars2, GREEN);
+    g.drawFunction(parse("tan(x)", vars), 0, vars2, YELLOW);
+    g.drawFunction(parse("x^2", vars), 0, vars2, CYAN);
+    g.save("graph.png");
+  }) << "ms" << endl;
 };
 
 // ln(|x|) -> abs, ! 1 / x
 // https://www.dummies.com/wp-content/uploads/323191.image0.png
-
 // ALLE KONSTRUKTOREN UMBENENNEN -> (int t1) : t(t1)  =>  (int _t) : t(_t)
