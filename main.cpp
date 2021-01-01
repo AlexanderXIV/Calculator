@@ -7,6 +7,7 @@
 #include <map>
 #include <algorithm>
 #include <functional>
+#include <fstream>
 
 #include <png++/image.hpp>
 #include <png++/rgb_pixel.hpp>
@@ -2248,6 +2249,181 @@ struct Graph
 };
 #pragma endregion
 
+#pragma region SVG
+const string style = "background-color:#000";
+const string url = "http://www.w3.org/2000/svg";
+
+struct GraphSVG
+{
+  int width, height;
+  bool set_window;
+  float xMin, xMax, yMin, yMax;
+  std::ofstream pic;
+
+  GraphSVG(const string filename, const int _width, const int _height, float _xMin, float _xMax, float _yMin, float _yMax, bool doEqualizeAxes = true, bool doDrawAxes = true) : width(_width), height(_height), set_window(false), xMin(_xMin), xMax(_xMax), yMin(_yMin), yMax(_yMax)
+  {
+    pic.open(filename);
+    pic << std::setprecision(8);
+    pic << "<svg width=\"" << width << "\" height=\"" << height << "\" style=\"" << style << "\" xmlns=\"" << url << "\">\n";
+
+    if (doEqualizeAxes)
+    {
+      float xRatio = (xMax - xMin) / (float)width;
+      float yRatio = (yMax - yMin) / (float)height;
+      if (xRatio < yRatio)
+      {
+        float xMid = (xMax + xMin) / 2.0f;
+        float half = (xMax - xMin) / 2.0f;
+        xMin = xMid - half * (yRatio / xRatio);
+        xMax = xMid + half * (yRatio / xRatio);
+      }
+      else
+      {
+        float yMid = (yMax + yMin) / 2.0f;
+        float half = (yMax - yMin) / 2.0f;
+        yMin = yMid - half * (xRatio / yRatio);
+        yMax = yMid + half * (xRatio / yRatio);
+      }
+    }
+
+    if (doDrawAxes)
+    {
+      std::array<float, 2> leftPt = canvasPtFromXY(xMin, xMax, yMin, yMax, xMin, 0);
+      if (0 <= leftPt[1] && leftPt[1] < (float)height)
+      {
+        std::array<float, 2> rightPt = canvasPtFromXY(xMin, xMax, yMin, yMax, xMax, 0);
+        drawLine(leftPt[0], leftPt[1], rightPt[0], rightPt[1]);
+        int tmp1 = (int)floor(xMax);
+        for (int x = (int)ceil(xMin); x <= tmp1; ++x)
+        {
+          std::array<float, 2> p = canvasPtFromXY(xMin, xMax, yMin, yMax, (float)x, 0);
+          drawLine(p[0], p[1] - 5, p[0], p[1] + 5);
+        }
+      }
+
+      std::array<float, 2> botPt = canvasPtFromXY(xMin, xMax, yMin, yMax, 0, yMin);
+      if (0 <= botPt[0] && botPt[0] < (float)width)
+      {
+        std::array<float, 2> topPt = canvasPtFromXY(xMin, xMax, yMin, yMax, 0, yMax);
+        drawLine(botPt[0], botPt[1], topPt[0], topPt[1]);
+        int tmp1 = (int)floor(yMax);
+        for (int y = (int)ceil(yMin); y <= tmp1; ++y)
+        {
+          std::array<float, 2> p = canvasPtFromXY(xMin, xMax, yMin, yMax, 0, (float)y);
+          drawLine(p[0] - 5, p[1], p[0] + 5, p[1]);
+        }
+      }
+    }
+  };
+
+  ~GraphSVG()
+  {
+    if (pic.is_open())
+    {
+      pic.flush();
+      pic.close();
+    }
+  }
+
+  void addAttribute(const string &identifier, const int value) { pic << " " << identifier << "=\"" << value << "\""; }
+  void addAttribute(const string &identifier, const float value) { pic << " " << identifier << "=\"" << value << "\""; }
+  void addAttribute(const string &identifier, const string &value) { pic << " " << identifier << "=\"" << value << "\""; }
+
+  void drawLine(float x1, float y1, float x2, float y2, const string stroke = "#ddd", const float stroke_width = 3.0)
+  {
+    pic << "<line";
+    addAttribute("stroke", stroke);
+    addAttribute("fill", "transparent");
+    addAttribute("stroke-width", stroke_width);
+    addAttribute("x1", x1);
+    addAttribute("y1", y1);
+    addAttribute("x2", x2);
+    addAttribute("y2", y2);
+    pic << "></line>\n";
+  }
+
+  // void drawPolyLine(const int num_points, const string stroke = "#666", const float stroke_width = 3.0)
+  // {
+  //   // x0 += shift_x;
+  //   // x1 += shift_x;
+  //   // y0 = height - (y0 + shift_y);
+  //   // y1 = height - (y1 + shift_y);
+
+  //   pic << "<polyline";
+  //   addAttribute("stroke", stroke);
+  //   addAttribute("fill", "transparent");
+  //   addAttribute("stroke-width", stroke_width);
+  //   pic << " points=\"0 " << fun(0);
+  //   double prec = (double)width / (double)num_points, val;
+  //   for (int i = 1; i <= num_points; ++i)
+  //   {
+  //     val = prec * (double)i;
+  //     cout << fun(val) << endl;
+  //     pic << " " << val << " " << fun(val);
+  //   }
+  //   pic << "\"></polyline>\n";
+  // }
+
+  std::array<float, 2> canvasPtFromXY(float xMin, float xMax, float yMin, float yMax, float x, float y)
+  {
+    return std::array<float, 2>{(float)width * ((x - xMin) / (xMax - xMin)), (float)height - ((y - yMin) / (yMax - yMin)) * (float)height};
+  }
+
+  void drawFn(const NodePtr &f, int varId, vector<decimal> variables, const int numFnPts = 300, const string stroke = "#666", const float stroke_width = 3.0)
+  {
+    float xDelta = (xMax - xMin) / (float)(numFnPts - 1);
+    vector<pair<float, float>> pts;
+    float xPrev = xMin;
+    float prevCanvasY = 0.0f;
+
+    pic << "<polyline";
+    addAttribute("stroke", stroke);
+    addAttribute("fill", "transparent");
+    addAttribute("stroke-width", stroke_width);
+    pic << " points=\"";
+
+    bool first = true;
+
+    for (int i = 0; i < numFnPts; ++i)
+    {
+      float x, xTarget = xMin + (float)i * xDelta;
+      do
+      {
+        x = xTarget;
+
+        variables[varId] = x;
+        float y = (float)eval(f, variables);
+        std::array<float, 2> canvasPt = canvasPtFromXY(xMin, xMax, yMin, yMax, x, y);
+        float perc = 0.5;
+        while (prevCanvasY != 0.0f && abs(prevCanvasY - canvasPt[1]) > 30 && perc > 0.0001)
+        {
+          x = (1.0f - perc) * xPrev + perc * xTarget;
+          variables[varId] = x;
+          float y = (float)eval(f, variables);
+          canvasPt = canvasPtFromXY(xMin, xMax, yMin, yMax, x, y);
+          perc /= 2.0f;
+        }
+        if (!first)
+          pic << " ";
+        pic << canvasPt[0] << " " << canvasPt[1];
+        first = false;
+        xPrev = x;
+        prevCanvasY = canvasPt[1];
+      } while (x < xTarget);
+    }
+
+    pic << "\"></polyline>\n";
+  }
+
+  void save()
+  {
+    pic << "</svg>";
+    pic.flush();
+    pic.close();
+  }
+};
+#pragma endregion
+
 long benchmark(std::function<void()> f)
 {
   auto start = std::chrono::system_clock::now();
@@ -2379,6 +2555,20 @@ int main()
     g.drawFunction(parse("tan(x)", vars), 0, vars2, YELLOW);
     g.drawFunction(parse("x^2", vars), 0, vars2, CYAN);
     g.save("graph.png");
+  }) << "ms"
+       << endl;
+
+  cout << "graph 1: " << benchmark([]() -> void { // ~271 ms
+    map<string, int> vars;
+    vector<decimal> vars2(1, 0);
+
+    GraphSVG g("example.svg", 1920, 1080, -3.0f, 10.0f, -3.0f, 10.0f, false);
+    g.drawFn(parse("x + 1", vars), 0, vars2, 300, "#00f", 2.0f);
+    g.drawFn(parse("sin(x)", vars), 0, vars2, 300, "#f00", 2.0f);
+    g.drawFn(parse("cos(x)", vars), 0, vars2, 300, "#0f0", 2.0f);
+    g.drawFn(parse("tan(x)", vars), 0, vars2, 300, "#ff0", 2.0f);
+    g.drawFn(parse("x^2", vars), 0, vars2, 300, "#0ff", 2.0f);
+    g.save();
   }) << "ms"
        << endl;
 };
