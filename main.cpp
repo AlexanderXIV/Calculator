@@ -1046,7 +1046,7 @@ NodePtr parse(string str, map<string, int> &vars)
   return parse(iter, vars, false);
 }
 
-decimal eval(const NodePtr &ptr_node, const vector<decimal> &vars)
+decimal eval(const NodePtr &ptr_node, const vector<decimal> &vars) // array
 {
   Node *node = ptr_node.get();
   switch (node->kind)
@@ -1773,7 +1773,7 @@ int find_all_roots(std::function<double(double)> f, const double lower, const do
   // }
 
   for (double x = lower; x <= upper; x += tol)
-    if (abs(abs(f(x - tol)) - abs(f(x))) < tol && abs(abs(f(x)) - abs(f(x + tol))) < tol && abs(f(x)) < tol)
+    if (abs(abs(f(x - tol)) - abs(f(x))) < tol && abs(abs(f(x)) - abs(f(x + tol))) < tol && abs(f(x)) < tol) // temp
     {
       roots.push_back(x);
       cout << f(x - tol) << " " << f(x) << " " << f(x + tol) << endl;
@@ -1782,6 +1782,7 @@ int find_all_roots(std::function<double(double)> f, const double lower, const do
   return roots.size();
 }
 
+// template -> Complex64
 struct Complex
 {
   bool is_kartesian;
@@ -1866,7 +1867,18 @@ pair<Complex, Complex> sqrt(Complex a)
   return make_pair(a, Complex(-1 * a.real, -1 * a.img));
 }
 
-vector<Complex> cbrt(Complex a)
+Complex sqrt_only_first(Complex a) // returns only first solution (second in principal identical)
+{
+  a.cartesian_to_polar();
+  a.is_kartesian = true;
+  decimal r = sqrt(a.real);
+  a.img *= 0.5;
+  a.real = r * cos(a.img);
+  a.img = r * sin(a.img);
+  return a;
+}
+
+vector<Complex> cbrt(Complex a) // array
 {
   a.cartesian_to_polar();
   a.is_kartesian = true;
@@ -1894,6 +1906,15 @@ vector<Complex> n_root(Complex a, int n)
   return solutions;
 }
 
+// returns only one solution (k = 0), all solutions: a.img += 2 * M_PI * k, k E Z
+Complex ln(Complex a)
+{
+  a.cartesian_to_polar();
+  a.is_kartesian = true;
+  a.real = log(a.real);
+  return a;
+}
+
 ostream &operator<<(ostream &os, const Complex &c)
 {
   if (c.real == 0)
@@ -1910,7 +1931,7 @@ ostream &operator<<(ostream &os, const Complex &c)
   else
   {
     if (c.img == 0)
-      os << '(' << c.real << ')' << endl;
+      os << '(' << c.real << ')';
     else if (c.img == 1)
       os << '(' << c.real << " + i)";
     else if (c.img == -1)
@@ -1945,9 +1966,68 @@ ostream &operator<<(ostream &os, const pair<Complex, Complex> &p)
 pair<Complex, Complex> abc(decimal a, decimal b, decimal c)
 {
   assert(a != 0 && "not abc Formula");
-  auto d1 = sqrt(Complex(pow(b, 2) - 4 * a * c));
-  const decimal a2 = 2 * a;
-  return make_pair(Complex((d1.first.real - b) / a2, d1.first.img / a2), Complex((d1.second.real - b) / a2, d1.second.img / a2));
+  auto d1 = sqrt_only_first(Complex(b * b - 4 * a * c));
+  const decimal a2 = 2 * a, pre_calc_img = d1.img / a2;
+  return make_pair(Complex((d1.real - b) / a2, pre_calc_img), Complex((-d1.real - b) / a2, -pre_calc_img));
+}
+
+std::array<Complex, 3> cardan(decimal a1, decimal b1, decimal c1, decimal d1)
+{
+  assert(a1 != 0);
+
+  decimal a, b, c, p, q, d, tmp;
+  a = b1 / a1, b = c1 / a1, c = d1 / a1;
+  tmp = a * a / 3.0;
+  p = b - tmp;
+  q = a * (2 * tmp / 3.0 - b) / 3.0 + c;
+  d = q * q / 4 + p * p * p / 27;
+
+  tmp = a / 3;
+  if (abs(d) < 10e-6) // naja, globaler Vegleich
+  {
+    decimal first = 3 * q / p - tmp;
+    b = a1 * first + b1;
+
+    Complex d1 = sqrt_only_first(Complex(b * b - 4 * a1 * (b * first + c1)));
+    const decimal a2 = 2 * a1, pre_calc_img = d1.img / a2;
+    return std::array<Complex, 3>{Complex(first), Complex((d1.real - b) / a2, pre_calc_img), Complex((-d1.real - b) / a2, -pre_calc_img)};
+  }
+  else if (d > 0)
+  {
+    d = sqrt(d);
+    decimal first = q / 2;
+    first = cbrt(d - first) - cbrt(d + first) - tmp;
+    b = a1 * first + b1;
+
+    Complex d1 = sqrt_only_first(Complex(b * b - 4 * a1 * (b * first + c1)));
+    const decimal a2 = 2 * a1, pre_calc_img = d1.img / a2;
+    return std::array<Complex, 3>{Complex(first), Complex((d1.real - b) / a2, pre_calc_img), Complex((-d1.real - b) / a2, -pre_calc_img)};
+  }
+  else
+  {
+    decimal r = sqrt(-4.0 * p / 3.0);
+    decimal phi = acos(-q / 2.0 * sqrt(-27.0 / (p * p * p))) / 3.0;
+
+    return std::array<Complex, 3>{Complex(r * cos(phi) - tmp), Complex(r * cos(phi + 2.0 / 3.0 * M_PI) - tmp), Complex(r * cos(phi + 4.0 / 3.0 * M_PI) - tmp)};
+  }
+}
+
+std::array<Complex, 4> quart(decimal a1, decimal b1, decimal c1, decimal d1, decimal e1)
+{
+  assert(a1 != 0);
+  decimal a, b, c, p, q, r, tmp;
+  a = b1 / a1, b = c1 / a1, c = d1 / a1, tmp = a * a;
+
+  p = -3.0 / 8.0 * tmp + b;
+  q = (tmp * a) / 8.0 - a * b / 2.0 + c;
+  r = tmp * (-3.0 / 256.0 * tmp + b / 16.0) - c * a / 4.0 + e1 / a1;
+
+  auto cd = cardan(1.0, -2.0 * p, p * p - 4.0 * r, q * q);
+
+  Complex z1 = sqrt_only_first(Complex(0) - cd[0]), z2 = sqrt_only_first(Complex(0) - cd[1]), z3 = sqrt_only_first(Complex(0) - cd[2]);
+  Complex omega = (q > 0 == (z1 * z2 * z3).real > 0) ? Complex(0.5) : Complex(-0.5);
+  Complex tmp2 = a / 4.0;
+  return std::array<Complex, 4>{Complex(omega * (z1 + z2 - z3) - tmp2), Complex(omega * (z1 - z2 + z3) - tmp2), Complex(omega * (z2 - z1 + z3) - tmp2) /* entspricht dem ersten??? */, Complex(omega * (Complex(0) - z1 - z2 - z3) - tmp2) /* entsprciht dem zweiten??? */};
 }
 #pragma endregion
 
@@ -2211,9 +2291,13 @@ int main()
   Complex b(1, -1); // = 1 - i
   pair<Complex, Complex> z1 = sqrt(aa + Complex(1, -1));
   cout << z1 << endl;
+  cout << ln(aa + Complex(1, -1)) << endl;
   cout << cbrt(aa + Complex(1, -1)) << endl;
   cout << n_root(aa + Complex(1, -1), 3) << endl;
   cout << aa / 3 << endl;
+  for (auto it : quart(1, 2, 3, 4, 5))
+    cout << it << " ";
+  cout << endl;
 
   decimal val = 2.7;
   string input;
@@ -2295,9 +2379,11 @@ int main()
     g.drawFunction(parse("tan(x)", vars), 0, vars2, YELLOW);
     g.drawFunction(parse("x^2", vars), 0, vars2, CYAN);
     g.save("graph.png");
-  }) << "ms" << endl;
+  }) << "ms"
+       << endl;
 };
 
 // ln(|x|) -> abs, ! 1 / x
 // https://www.dummies.com/wp-content/uploads/323191.image0.png
 // ALLE KONSTRUKTOREN UMBENENNEN -> (int t1) : t(t1)  =>  (int _t) : t(_t)
+// ueberall: vector<...> -> array<...>
