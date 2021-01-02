@@ -1438,7 +1438,7 @@ decimal deriveAt(const NodePtr &ptr_node, vector<decimal> &vars, int varId, cons
 struct range
 {
   double min_val, max_val;
-  range(double l1, double u1) : min_val(l1), max_val(u1){}; // l1, u1 inclusive
+  range(double _min_val, double _max_val) : min_val(_min_val), max_val(_max_val){}; // l1, u1 inclusive
   friend ostream &operator<<(ostream &os, const range &r);
 };
 
@@ -2248,9 +2248,6 @@ struct GraphPNG
   }
 };
 
-const string style = "background-color:#000";
-const string url = "http://www.w3.org/2000/svg";
-
 enum EqualizeType
 {
   None,
@@ -2259,21 +2256,101 @@ enum EqualizeType
   EqualizeAuto
 };
 
-const int dif_tick_x = 2;
-const int dif_tick_y = 2;
+const int higlighting_step = 4;
+
+const int perfect_val_len = 125;
+
+const int nums_circle_radius = 10;
+const int num_shift_x_axis = 20;
+const int num_shift_y_axis = num_shift_x_axis;
+
+// #define MODE_LIGHT
+#define MODE_DARK
+// #define MODE_SUPER_DARK
+// default: MODE_DARK
+
+#if defined(MODE_LIGHT)
+const string color_background = "#fff";
+const string color_axis = "#000";
+const string color_lines = "#E5E5E5";
+const string color_lines_highlighted = "#C0C0C0";
+#elif defined(MODE_SUPER_DARK)
+const string color_background = "#000";
+const string color_axis = "#fff";
+const string color_lines = "#1A1A1A";
+const string color_lines_highlighted = "#3F3F3F";
+#else
+const string color_background = "#333333";
+const string color_axis = "#fff";
+const string color_lines = "#424242";
+const string color_lines_highlighted = "#5C5C5C";
+#endif
+
+const string color_nums = color_axis;
+const string style = "background-color:" + color_background + ";shape-rendering:geometricPrecision; text-rendering:geometricPrecision; image-rendering:optimizeQuality; fill-rule:evenodd; clip-rule:evenodd;";
+const string url = "http://www.w3.org/2000/svg";
+
 struct GraphSVG
 {
+  float dif_tick_x, dif_tick_y;
   int width, height;
   bool set_window;
   float xMin, xMax, yMin, yMax;
   std::ofstream pic;
 
+  // Fehler: Keine Y-Achse, X-Achse unv.
+  void drawInterlines(const float min_val, const float max_val, const float tick, std::function<void(float, bool)> stn)
+  {
+    int counter = 0;
+    if (min_val <= 0 && max_val >= 0)
+    {
+      for (float x = -tick; x > min_val; x -= tick)
+        stn(x, ((++counter >= higlighting_step) ? counter = 0, true : false));
+      counter = 0;
+      for (float x = tick; x < max_val; x += tick)
+        stn(x, ((++counter >= higlighting_step) ? counter = 0, true : false));
+    }
+    else if (max_val < 0)
+      for (float x = max_val - fmod(max_val, tick); x > min_val; x -= tick) // flaot inacurracy, reason for partly ugly layout (left, right)
+        stn(x, ((++counter >= higlighting_step) ? counter = 0, true : false));
+    else if (min_val > 0)
+      for (float x = min_val + fmod(min_val, tick); x < max_val; x += tick)
+        stn(x, ((++counter >= higlighting_step) ? counter = 0, true : false));
+  }
+  
+  template <typename T>
+  void addAttribute(const string &identifier, const T value) { pic << " " << identifier << "=\"" << value << "\""; }
+
+  void drawLine(float x1, float y1, float x2, float y2, const string stroke, const float stroke_width = 3.0)
+  {
+    pic << "<line";
+    addAttribute("stroke", stroke);
+    addAttribute("fill", "transparent");
+    addAttribute("stroke-width", stroke_width);
+    addAttribute("x1", x1);
+    addAttribute("y1", y1);
+    addAttribute("x2", x2);
+    addAttribute("y2", y2);
+    pic << "></line>\n";
+  }
+
+  void drawHorizontal(float x1, float y, float x2, const string stroke, const float stroke_width = 3.0) { drawLine(x1, y, x2, y, stroke, stroke_width); }
+
+  void drawVertical(float x, float y1, float y2, const string stroke, const float stroke_width = 3.0) { drawLine(x, y1, x, y2, stroke, stroke_width); }
+
+  float canvasXFromX(float x) { return (float)width * ((x - xMin) / (xMax - xMin)); }
+
+  float canvasYFromY(float y) { return (float)height - (float)height * ((y - yMin) / (yMax - yMin)); }
+
+  std::array<float, 2> canvasPtFromXY(float x, float y) { return std::array<float, 2>{(float)width * ((x - xMin) / (xMax - xMin)), (float)height - ((y - yMin) / (yMax - yMin)) * (float)height}; }
+
   GraphSVG(const string filename, const int _width, const int _height, float _xMin, float _xMax, float _yMin, float _yMax, EqualizeType equalizetype, bool drawAxes = true) : width(_width), height(_height), set_window(false), xMin(_xMin), xMax(_xMax), yMin(_yMin), yMax(_yMax)
   {
     pic.open(filename);
     pic << std::setprecision(5);
-    pic << "<svg width=\"" << width << "\" height=\"" << height << "\" style=\"" << style << "\" xmlns=\"" << url << "\"><style>.function:hover{stroke-width: 4;transition: all ease 0.3s;}.label:hover{cursor: default;pointer-events: none;}.label{cursor: default;pointer-events: none;}</style>\n";
 
+    pic << "<svg width=\"" << width << "\" height=\"" << height << "\" style=\"" << style << "\" xmlns=\"" << url << "\"><style>.function:hover{stroke-width: 4;transition: all ease 0.3s;}.label:hover{cursor: default;pointer-events: none;}.label{cursor: default;pointer-events: none;}</style>\n";
+    pic << "<title>Calculator</title>\n";
     if (equalizetype == EqualizeXAxes)
     {
       float xMid = (xMax + xMin) / 2.0f;
@@ -2302,41 +2379,54 @@ struct GraphSVG
       else
       {
         float yMid = (yMax + yMin) / 2.0f;
-        float half = (yRatio / xRatio) * (yMax - yMin) / 2.0f;
+        float half = (xRatio / yRatio) * (yMax - yMin) / 2.0f;
         yMin = yMid - half;
         yMax = yMid + half;
       }
     }
 
+    float tmp_x = (float)perfect_val_len * (xMax - xMin) / (float)width;
+    int ceros_x = (int)floor(log10(tmp_x));
+    if (ceros_x != 0)
+      tmp_x /= pow(10, ceros_x);
+
+    if (tmp_x < 1.5)
+      dif_tick_x = 1 * pow(10, ceros_x);
+    else if (tmp_x < 3.5)
+      dif_tick_x = 2 * pow(10, ceros_x);
+    else if (tmp_x < 7.5)
+      dif_tick_x = 5 * pow(10, ceros_x);
+    else
+      dif_tick_x = pow(10, ceros_x + 1);
+
+    float tmp_y = (float)perfect_val_len * (yMax - yMin) / (float)height;
+    int ceros_y = (int)floor(log10(tmp_y));
+    if (ceros_y != 0)
+      tmp_y /= pow(10, ceros_y);
+
+    if (tmp_y < 1.5)
+      dif_tick_y = 1 * pow(10, ceros_y);
+    else if (tmp_y < 3.5)
+      dif_tick_y = 2 * pow(10, ceros_y);
+    else if (tmp_y < 7.5)
+      dif_tick_y = 5 * pow(10, ceros_y);
+    else
+      dif_tick_y = pow(10, ceros_y + 1);
+
     if (drawAxes)
     {
-      std::array<float, 2> leftPt = canvasPtFromXY(xMin, xMax, yMin, yMax, xMin, 0);
-      if (0 <= leftPt[1] && leftPt[1] < (float)height)
-      {
-        std::array<float, 2> rightPt = canvasPtFromXY(xMin, xMax, yMin, yMax, xMax, 0);
-        drawLine(leftPt[0], leftPt[1], rightPt[0], rightPt[1]);
-        int tmp1 = (int)floor(xMax);
-        for (int x = (int)ceil(xMin); x <= tmp1; x += dif_tick_x)
-        {
-          std::array<float, 2> p = canvasPtFromXY(xMin, xMax, yMin, yMax, (float)x, 0);
-          drawLine(p[0], p[1] - 5, p[0], p[1] + 5);
-          drawText(p[0], p[1] + 20, x);
-        }
-      }
+      std::array<float, 2> leftPt = canvasPtFromXY(xMin, 0);
+      std::array<float, 2> rightPt = canvasPtFromXY(xMax, 0);
+      std::array<float, 2> botPt = canvasPtFromXY(0, yMin);
+      std::array<float, 2> topPt = canvasPtFromXY(0, yMax);
 
-      std::array<float, 2> botPt = canvasPtFromXY(xMin, xMax, yMin, yMax, 0, yMin);
-      if (0 <= botPt[0] && botPt[0] < (float)width)
-      {
-        std::array<float, 2> topPt = canvasPtFromXY(xMin, xMax, yMin, yMax, 0, yMax);
-        drawLine(botPt[0], botPt[1], topPt[0], topPt[1]);
-        int tmp1 = (int)floor(yMax);
-        for (int y = (int)ceil(yMin); y <= tmp1; y += dif_tick_y)
-        {
-          std::array<float, 2> p = canvasPtFromXY(xMin, xMax, yMin, yMax, 0, (float)y);
-          drawLine(p[0] - 5, p[1], p[0] + 5, p[1]);
-          drawText(p[0] + 20, p[1], y);
-        }
-      }
+      drawInterlines(xMin, xMax, dif_tick_x, [=](float x, bool highlighted) -> void { drawVertical(canvasXFromX(x), botPt[1], topPt[1], ((highlighted) ? color_lines_highlighted : color_lines), 1.5f); });
+      drawInterlines(yMin, yMax, dif_tick_y, [=](float y, bool highlighted) -> void { drawHorizontal(leftPt[0], canvasYFromY(y), rightPt[0], ((highlighted) ? color_lines_highlighted : color_lines), 1.5f); });
+
+      if (0 <= leftPt[1] && rightPt[1] <= (float)height)
+        drawLine(leftPt[0], leftPt[1], rightPt[0], rightPt[1], color_axis, 1.5f);
+      if (0 <= botPt[0] && topPt[0] <= (float)width)
+        drawLine(botPt[0], botPt[1], topPt[0], topPt[1], color_axis, 1.5f);
     }
   };
 
@@ -2349,77 +2439,10 @@ struct GraphSVG
     }
   }
 
-  void addAttribute(const string &identifier, const int value) { pic << " " << identifier << "=\"" << value << "\""; }
-  void addAttribute(const string &identifier, const float value) { pic << " " << identifier << "=\"" << value << "\""; }
-  void addAttribute(const string &identifier, const string &value) { pic << " " << identifier << "=\"" << value << "\""; }
-
-  void drawLine(float x1, float y1, float x2, float y2, const string stroke = "#ddd", const float stroke_width = 3.0)
-  {
-    pic << "<line";
-    addAttribute("stroke", stroke);
-    addAttribute("fill", "transparent");
-    addAttribute("stroke-width", stroke_width);
-    addAttribute("x1", x1);
-    addAttribute("y1", y1);
-    addAttribute("x2", x2);
-    addAttribute("y2", y2);
-    pic << "></line>\n";
-  }
-
-  void drawText(const int x, const int y, const string text)
-  {
-    pic << "<text";
-    addAttribute("stroke", "white");
-    addAttribute("dominant-baseline", "middle");
-    addAttribute("text-anchor", "middle");
-    addAttribute("x", x);
-    addAttribute("y", y);
-    pic << ">" << text << "</text>\n";
-  }
-
-  void drawText(const int x, const int y, const int num)
-  {
-    pic << "<text";
-    addAttribute("stroke", "white");
-    addAttribute("dominant-baseline", "middle");
-    addAttribute("text-anchor", "middle");
-    addAttribute("x", x);
-    addAttribute("y", y);
-    pic << ">" << num << "</text>\n";
-  }
-
-  // void drawPolyLine(const int num_points, const string stroke = "#666", const float stroke_width = 3.0)
-  // {
-  //   // x0 += shift_x;
-  //   // x1 += shift_x;
-  //   // y0 = height - (y0 + shift_y);
-  //   // y1 = height - (y1 + shift_y);
-
-  //   pic << "<polyline";
-  //   addAttribute("stroke", stroke);
-  //   addAttribute("fill", "transparent");
-  //   addAttribute("stroke-width", stroke_width);
-  //   pic << " points=\"0 " << fun(0);
-  //   double prec = (double)width / (double)num_points, val;
-  //   for (int i = 1; i <= num_points; ++i)
-  //   {
-  //     val = prec * (double)i;
-  //     cout << fun(val) << endl;
-  //     pic << " " << val << " " << fun(val);
-  //   }
-  //   pic << "\"></polyline>\n";
-  // }
-
-  std::array<float, 2> canvasPtFromXY(float xMin, float xMax, float yMin, float yMax, float x, float y)
-  {
-    return std::array<float, 2>{(float)width * ((x - xMin) / (xMax - xMin)), (float)height - ((y - yMin) / (yMax - yMin)) * (float)height};
-  }
-
-  void drawFn(const NodePtr &f, int varId, vector<decimal> variables, const int numFnPts = 300, const string stroke = "#666", const float stroke_width = 3.0)
+  void drawFn(const NodePtr &f, int varId, vector<decimal> variables, const int numFnPts = 300, const string stroke = "red", const float stroke_width = 3.0)
   {
     float xDelta = (xMax - xMin) / (float)(numFnPts - 1);
     vector<pair<float, float>> pts;
-    float xPrev = xMin;
 
     pic << "<path";
     addAttribute("class", "function");
@@ -2440,7 +2463,7 @@ struct GraphSVG
 
         variables[varId] = x;
         float y = (float)eval(f, variables);
-        std::array<float, 2> canvasPt = canvasPtFromXY(xMin, xMax, yMin, yMax, x, y);
+        std::array<float, 2> canvasPt = canvasPtFromXY(x, y);
 
         // float perc = 0.5;
         // while (!first_point && abs(last_y - canvasPt[1]) > 30 && perc >= 0.5)
@@ -2452,7 +2475,7 @@ struct GraphSVG
         //   perc /= 2.0f;
         // }
 
-        if (0 <= canvasPt[1] && canvasPt[1] <= height)
+        if (0 <= canvasPt[1] && canvasPt[1] <= (float)height)
         {
           if (jump)
           {
@@ -2477,7 +2500,7 @@ struct GraphSVG
           if (!jump)
           {
             const int val = (canvasPt[1] < 0) ? 0 : height;
-            pic << " L" << ((val - canvasPt[1]) * (canvasPt[0] - last_x)) / ((canvasPt[1] - last_y)) + canvasPt[0] << " " << val;
+            pic << " L" << (((float)val - canvasPt[1]) * (canvasPt[0] - last_x)) / ((canvasPt[1] - last_y)) + canvasPt[0] << " " << val;
           }
           jump = true;
         }
@@ -2486,15 +2509,68 @@ struct GraphSVG
         last_y = canvasPt[1];
         first_iteration = false;
 
-        xPrev = x;
       } while (x < xTarget);
     }
 
     pic << "\"></path>\n";
   }
 
+  void drawCircle(float x, float y, float r, const string col)
+  {
+    pic << "<circle";
+    addAttribute("cx", x);
+    addAttribute("cy", y);
+    addAttribute("r", r);
+    addAttribute("fill", col);
+    pic << "/>\n";
+  }
+
+  template <typename Text>
+  void drawText(const float x, const float y, const string col, const Text text)
+  {
+    pic << "<text";
+    addAttribute("fill", col);
+    // addAttribute("stroke", "#333333");
+    addAttribute("dominant-baseline", "central");
+    addAttribute("text-anchor", "middle");
+    addAttribute("x", x);
+    addAttribute("y", y);
+    pic << ">" << text << "</text>\n";
+  }
+
+  void drawTextCircle(float x, float y, const float num, const string col, const int rad, const int shift_x, const int shift_y)
+  {
+    x = (float)shift_x + canvasXFromX((float)x);
+    y = (float)shift_y + canvasYFromY((float)y);
+    drawCircle(x, y, (float)rad, col);
+    drawText(x, y, color_nums, num);
+  }
+
   void save()
   {
+    float axis_shift_x, axis_shift_y;
+    int shift_x_axis = num_shift_x_axis, shift_y_axis = num_shift_y_axis;
+
+    if (xMin <= 0 && xMax >= 0)
+      axis_shift_x = 0;
+    else if (xMax < 0)
+      axis_shift_x = xMax, shift_x_axis = -shift_x_axis;
+    else if (xMin > 0)
+      axis_shift_x = xMin;
+
+    if (yMin <= 0 && yMax >= 0)
+      axis_shift_y = 0;
+    else if (yMax < 0)
+      axis_shift_y = yMax;
+    else if (yMin > 0)
+      axis_shift_y = yMin, shift_y_axis = -shift_y_axis;
+
+    drawInterlines(xMin, xMax, dif_tick_x, [=](float x, bool highlighted) -> void { drawTextCircle(x, axis_shift_y, x, (highlighted) ? color_background : color_background, nums_circle_radius, 0, shift_y_axis); }); // change color
+    drawInterlines(yMin, yMax, dif_tick_y, [=](float y, bool highlighted) -> void { drawTextCircle(axis_shift_x, y, y, (highlighted) ? color_background : color_background, nums_circle_radius, shift_x_axis, 0); }); // change color
+
+    if ((yMin <= 0 && 0 <= yMax) || (xMin <= 0 && 0 <= xMax))
+      drawTextCircle(axis_shift_x, axis_shift_y, 0, color_background, nums_circle_radius, num_shift_x_axis, num_shift_y_axis);
+
     pic << "</svg>";
     pic.flush();
     pic.close();
@@ -2519,43 +2595,37 @@ int main()
   // input 2e -> 2 * e : mal ergaenzen
   // Schreibweise "sin 4" anstatt "sin(4)" testen
 
-  // Wann lohnt es sich eine Referenz / den Wert zu übergeben?
+  // Wann lohnt es sich eine Referenz / den Wert zu übergeben? -> double ???
   // for-schleife auto oder size_t
 
   // benchmark: "-(-4-5*x--2)+7*(3-2)+2*sin(0.2)*log(4,5)(x+1)" parse, simplify, derive, simplify ~ 60.000ns
-  // auto start = chrono::system_clock::now();
-  // auto end = chrono::system_clock::now();
-  // auto t = chrono::duration_cast<chrono::nanoseconds>(end - start);
-  // cout << t.count() << "ns" << endl;
 
-  double result;
-  if (brents_fun([](double x) { return (x * x * x - 3 * x * x + 2 * x); }, -1, 3, 1e-8, 1e4, result))
-    cout << "success: " << result;
-  else
-    cout << "failed";
-  cout << endl;
+  // double result;
+  // if (brents_fun([](double x) { return (x * x * x - 3 * x * x + 2 * x); }, -1, 3, 1e-8, 1e4, result))
+  //   cout << "success: " << result;
+  // else
+  //   cout << "failed";
+  // cout << endl;
 
-  vector<double> v11;
-  cout << find_all_roots([](double x) { return (x * x * x - 3 * x * x + 2 * x); }, -1, 3, 0.01, v11) << endl;
-  for (auto &e : v11)
-    cout << e << endl;
-  cout << endl;
+  // vector<double> v11;
+  // cout << find_all_roots([](double x) { return (x * x * x - 3 * x * x + 2 * x); }, -1, 3, 0.01, v11) << endl;
+  // for (auto &e : v11)
+  //   cout << e << endl;
+  // cout << endl;
 
-  Complex aa(5, 3); // = 5 + 3i
-  Complex b(1, -1); // = 1 - i
-  pair<Complex, Complex> z1 = sqrt(aa + Complex(1, -1));
-  cout << z1 << endl;
-  cout << ln(aa + Complex(1, -1)) << endl;
-  cout << cbrt(aa + Complex(1, -1)) << endl;
-  cout << n_root(aa + Complex(1, -1), 3) << endl;
-  cout << aa / 3 << endl;
-  for (auto it : quart(1, 2, 3, 4, 5))
-    cout << it << " ";
-  cout << endl;
+  // Complex aa(5, 3); // = 5 + 3i
+  // Complex b(1, -1); // = 1 - i
+  // pair<Complex, Complex> z1 = sqrt(aa + Complex(1, -1));
+  // cout << z1 << endl;
+  // cout << ln(aa + Complex(1, -1)) << endl;
+  // cout << cbrt(aa + Complex(1, -1)) << endl;
+  // cout << n_root(aa + Complex(1, -1), 3) << endl;
+  // cout << aa / 3 << endl;
+  // for (auto it : quart(1, 2, 3, 4, 5))
+  //   cout << it << " ";
+  // cout << endl;
 
-  decimal val = 2.7;
   string input;
-  map<string, int> vars;
 
   // input = "-2(-x+1)x(x-1)(4x)*zy+variableX7";
   // input = "-1+7*(3-2)+2*sin(0.2)*log(4,5)";
@@ -2598,11 +2668,13 @@ int main()
   input = "sin(x)";
   // input = "(2x) / (1 + x^2)"; // 2x / (...) ???
 
+  map<string, int> vars;
   NodePtr f = parse(input, vars);
   NodePtr fs = simplify(f);
   NodePtr d = derive(fs, vars.find("x")->second);
   NodePtr s1 = simplify(d);
 
+  decimal val = 2.7;
   vector<decimal> vars2(vars.size(), 0);
   for (auto &item : vars2)
     item = val;
@@ -2636,12 +2708,15 @@ int main()
   // }) << "ms"
   //      << endl;
 
-  cout << "graph 1: " << benchmark([]() -> void { // ~271 ms
+  cout << "graph 1: " << benchmark([]() -> void { // ~20 ms
     map<string, int> vars;
     vector<decimal> vars2(1, 0);
 
-    GraphSVG g("example.svg", 1920, 1080, -1.0f, 10.0f, -20.0f, 20.0f, EqualizeXAxes);
+    GraphSVG g("example.svg", 1920, 1080, -6.2f, 4.0f, -8.5f, 10.35f, EqualizeAuto);
+    // GraphSVG g("example.svg", 1920, 1080, -10.2f, -6.0f, 8.5f, 10.35f, None);
+    // GraphSVG g("example.svg", 1920, 1080, -10.2f, -6.0f, -10.5f, -8.35f, None);
     g.drawFn(parse("x + 1", vars), 0, vars2, 1920, "#00f", 2.0f);
+    g.drawFn(parse("-x", vars), 0, vars2, 1920, "#f0f", 2.0f);
     g.drawFn(parse("sin(x)", vars), 0, vars2, 1920, "#f00", 2.0f);
     g.drawFn(parse("cos(x)", vars), 0, vars2, 1920, "#0f0", 2.0f);
     g.drawFn(parse("tan(x)", vars), 0, vars2, 1920, "#ff0", 2.0f);
@@ -2653,6 +2728,4 @@ int main()
 
 // ln(|x|) -> abs, ! 1 / x
 // https://www.dummies.com/wp-content/uploads/323191.image0.png
-// ALLE KONSTRUKTOREN UMBENENNEN -> (int t1) : t(t1)  =>  (int _t) : t(_t)
 // ueberall: vector<...> -> array<...>
-// Todo: GraphSVG -> Zahlen anpassen range
