@@ -2044,13 +2044,13 @@ const int len_seperation_lines = 5;
 #define MAGENTA png::rgb_pixel_16(MAX_VAL, 0, MAX_VAL)
 #define WHITE png::rgb_pixel_16(MAX_VAL, MAX_VAL, MAX_VAL)
 
-struct Graph
+struct GraphPNG
 {
   png::image<png::rgb_pixel_16> img;
   int width, height, shift_x, shift_y;
   float ratio_x, ratio_y;
 
-  Graph(int _width, int _height, float window_left, float window_right, float window_bottom, float window_top) : img(_width, _height), width(_width), height(_height)
+  GraphPNG(int _width, int _height, float window_left, float window_right, float window_bottom, float window_top) : img(_width, _height), width(_width), height(_height)
   {
     assert(width > 100 && "min. resolution");
     assert(height > 100 && "min. resolution");
@@ -2067,7 +2067,7 @@ struct Graph
     shift_y = -window_bottom * ratio_y;
   }
 
-  Graph(int _width, int _height, float window_left, float window_right, float window_bottom) : img(_width, _height), width(_width), height(_height)
+  GraphPNG(int _width, int _height, float window_left, float window_right, float window_bottom) : img(_width, _height), width(_width), height(_height)
   {
     float window_top = (float)(height * (window_right - window_left)) / (float)width + window_bottom;
 
@@ -2086,7 +2086,7 @@ struct Graph
     shift_y = -window_bottom * ratio_y;
   }
 
-  Graph(int _width, int _height, float window_left, float window_right) : img(_width, _height), width(_width), height(_height)
+  GraphPNG(int _width, int _height, float window_left, float window_right) : img(_width, _height), width(_width), height(_height)
   {
     float window_top = (float)(height * (window_right - window_left)) / (float)(2 * width);
 
@@ -2247,12 +2247,20 @@ struct Graph
     img.write(name);
   }
 };
-#pragma endregion
 
-#pragma region SVG
 const string style = "background-color:#000";
 const string url = "http://www.w3.org/2000/svg";
 
+enum EqualizeType
+{
+  None,
+  EqualizeXAxes,
+  EqualizeYAxes,
+  EqualizeAuto
+};
+
+const int dif_tick_x = 2;
+const int dif_tick_y = 2;
 struct GraphSVG
 {
   int width, height;
@@ -2260,33 +2268,47 @@ struct GraphSVG
   float xMin, xMax, yMin, yMax;
   std::ofstream pic;
 
-  GraphSVG(const string filename, const int _width, const int _height, float _xMin, float _xMax, float _yMin, float _yMax, bool doEqualizeAxes = true, bool doDrawAxes = true) : width(_width), height(_height), set_window(false), xMin(_xMin), xMax(_xMax), yMin(_yMin), yMax(_yMax)
+  GraphSVG(const string filename, const int _width, const int _height, float _xMin, float _xMax, float _yMin, float _yMax, EqualizeType equalizetype, bool drawAxes = true) : width(_width), height(_height), set_window(false), xMin(_xMin), xMax(_xMax), yMin(_yMin), yMax(_yMax)
   {
     pic.open(filename);
-    pic << std::setprecision(8);
-    pic << "<svg width=\"" << width << "\" height=\"" << height << "\" style=\"" << style << "\" xmlns=\"" << url << "\">\n";
+    pic << std::setprecision(5);
+    pic << "<svg width=\"" << width << "\" height=\"" << height << "\" style=\"" << style << "\" xmlns=\"" << url << "\"><style>.function:hover{stroke-width: 4;transition: all ease 0.3s;}.label:hover{cursor: default;pointer-events: none;}.label{cursor: default;pointer-events: none;}</style>\n";
 
-    if (doEqualizeAxes)
+    if (equalizetype == EqualizeXAxes)
+    {
+      float xMid = (xMax + xMin) / 2.0f;
+      float half = (((float)width * (yMax - yMin)) / (float)height) / 2.0f;
+      xMin = xMid - half;
+      xMax = xMid + half;
+    }
+    else if (equalizetype == EqualizeYAxes)
+    {
+      float yMid = (yMax + yMin) / 2.0f;
+      float half = (((float)height * (xMax - xMin)) / (float)width) / 2.0f;
+      yMin = yMid - half;
+      yMax = yMid + half;
+    }
+    else if (equalizetype == EqualizeAuto)
     {
       float xRatio = (xMax - xMin) / (float)width;
       float yRatio = (yMax - yMin) / (float)height;
       if (xRatio < yRatio)
       {
         float xMid = (xMax + xMin) / 2.0f;
-        float half = (xMax - xMin) / 2.0f;
-        xMin = xMid - half * (yRatio / xRatio);
-        xMax = xMid + half * (yRatio / xRatio);
+        float half = (yRatio / xRatio) * (xMax - xMin) / 2.0f;
+        xMin = xMid - half;
+        xMax = xMid + half;
       }
       else
       {
         float yMid = (yMax + yMin) / 2.0f;
-        float half = (yMax - yMin) / 2.0f;
-        yMin = yMid - half * (xRatio / yRatio);
-        yMax = yMid + half * (xRatio / yRatio);
+        float half = (yRatio / xRatio) * (yMax - yMin) / 2.0f;
+        yMin = yMid - half;
+        yMax = yMid + half;
       }
     }
 
-    if (doDrawAxes)
+    if (drawAxes)
     {
       std::array<float, 2> leftPt = canvasPtFromXY(xMin, xMax, yMin, yMax, xMin, 0);
       if (0 <= leftPt[1] && leftPt[1] < (float)height)
@@ -2294,10 +2316,11 @@ struct GraphSVG
         std::array<float, 2> rightPt = canvasPtFromXY(xMin, xMax, yMin, yMax, xMax, 0);
         drawLine(leftPt[0], leftPt[1], rightPt[0], rightPt[1]);
         int tmp1 = (int)floor(xMax);
-        for (int x = (int)ceil(xMin); x <= tmp1; ++x)
+        for (int x = (int)ceil(xMin); x <= tmp1; x += dif_tick_x)
         {
           std::array<float, 2> p = canvasPtFromXY(xMin, xMax, yMin, yMax, (float)x, 0);
           drawLine(p[0], p[1] - 5, p[0], p[1] + 5);
+          drawText(p[0], p[1] + 20, x);
         }
       }
 
@@ -2307,10 +2330,11 @@ struct GraphSVG
         std::array<float, 2> topPt = canvasPtFromXY(xMin, xMax, yMin, yMax, 0, yMax);
         drawLine(botPt[0], botPt[1], topPt[0], topPt[1]);
         int tmp1 = (int)floor(yMax);
-        for (int y = (int)ceil(yMin); y <= tmp1; ++y)
+        for (int y = (int)ceil(yMin); y <= tmp1; y += dif_tick_y)
         {
           std::array<float, 2> p = canvasPtFromXY(xMin, xMax, yMin, yMax, 0, (float)y);
           drawLine(p[0] - 5, p[1], p[0] + 5, p[1]);
+          drawText(p[0] + 20, p[1], y);
         }
       }
     }
@@ -2340,6 +2364,28 @@ struct GraphSVG
     addAttribute("x2", x2);
     addAttribute("y2", y2);
     pic << "></line>\n";
+  }
+
+  void drawText(const int x, const int y, const string text)
+  {
+    pic << "<text";
+    addAttribute("stroke", "white");
+    addAttribute("dominant-baseline", "middle");
+    addAttribute("text-anchor", "middle");
+    addAttribute("x", x);
+    addAttribute("y", y);
+    pic << ">" << text << "</text>\n";
+  }
+
+  void drawText(const int x, const int y, const int num)
+  {
+    pic << "<text";
+    addAttribute("stroke", "white");
+    addAttribute("dominant-baseline", "middle");
+    addAttribute("text-anchor", "middle");
+    addAttribute("x", x);
+    addAttribute("y", y);
+    pic << ">" << num << "</text>\n";
   }
 
   // void drawPolyLine(const int num_points, const string stroke = "#666", const float stroke_width = 3.0)
@@ -2374,15 +2420,16 @@ struct GraphSVG
     float xDelta = (xMax - xMin) / (float)(numFnPts - 1);
     vector<pair<float, float>> pts;
     float xPrev = xMin;
-    float prevCanvasY = 0.0f;
 
-    pic << "<polyline";
+    pic << "<path";
+    addAttribute("class", "function");
     addAttribute("stroke", stroke);
     addAttribute("fill", "transparent");
     addAttribute("stroke-width", stroke_width);
-    pic << " points=\"";
+    pic << " d=\"";
 
-    bool first = true;
+    bool first_iteration = true, first_point = true, jump = true;
+    float last_x, last_y;
 
     for (int i = 0; i < numFnPts; ++i)
     {
@@ -2394,25 +2441,56 @@ struct GraphSVG
         variables[varId] = x;
         float y = (float)eval(f, variables);
         std::array<float, 2> canvasPt = canvasPtFromXY(xMin, xMax, yMin, yMax, x, y);
-        float perc = 0.5;
-        while (prevCanvasY != 0.0f && abs(prevCanvasY - canvasPt[1]) > 30 && perc > 0.0001)
+
+        // float perc = 0.5;
+        // while (!first_point && abs(last_y - canvasPt[1]) > 30 && perc >= 0.5)
+        // {
+        //   x = (1.0f - perc) * xPrev + perc * xTarget;
+        //   variables[varId] = x;
+        //   float y = (float)eval(f, variables);
+        //   canvasPt = canvasPtFromXY(xMin, xMax, yMin, yMax, x, y);
+        //   perc /= 2.0f;
+        // }
+
+        if (0 <= canvasPt[1] && canvasPt[1] <= height)
         {
-          x = (1.0f - perc) * xPrev + perc * xTarget;
-          variables[varId] = x;
-          float y = (float)eval(f, variables);
-          canvasPt = canvasPtFromXY(xMin, xMax, yMin, yMax, x, y);
-          perc /= 2.0f;
+          if (jump)
+          {
+            if (first_point)
+            {
+              pic << "M";
+              if (!first_iteration)
+                pic << last_x << " " << last_y << " L";
+            }
+            else
+              pic << " M" << last_x << " " << last_y << " L";
+            first_point = false;
+            jump = false;
+          }
+          else
+            pic << " L";
+
+          pic << canvasPt[0] << " " << canvasPt[1];
         }
-        if (!first)
-          pic << " ";
-        pic << canvasPt[0] << " " << canvasPt[1];
-        first = false;
+        else
+        {
+          if (!jump)
+          {
+            const int val = (canvasPt[1] < 0) ? 0 : height;
+            pic << " L" << ((val - canvasPt[1]) * (canvasPt[0] - last_x)) / ((canvasPt[1] - last_y)) + canvasPt[0] << " " << val;
+          }
+          jump = true;
+        }
+
+        last_x = canvasPt[0];
+        last_y = canvasPt[1];
+        first_iteration = false;
+
         xPrev = x;
-        prevCanvasY = canvasPt[1];
       } while (x < xTarget);
     }
 
-    pic << "\"></polyline>\n";
+    pic << "\"></path>\n";
   }
 
   void save()
@@ -2540,34 +2618,34 @@ int main()
        << "Achensymmetrisch: " << ((axis_symmetic(f, 0)) ? "yes" : "no / maybe") << endl
        << "Punktsymmetrisch: " << ((point_symmetic(f, 0)) ? "yes" : "no / maybe") << endl;
 
-  // Graph g(1920, 1080, -0.5, 10, -0.5, 10);
-  // Graph g(1920, 1080, -3, 10, -3, 10);
-  // Graph g(1920, 1080, -3, 10);
+  // GraphPNG g(1920, 1080, -0.5, 10, -0.5, 10);
+  // GraphPNG g(1920, 1080, -3, 10, -3, 10);
+  // GraphPNG g(1920, 1080, -3, 10);
+  // cout << "graph 1: " << benchmark([]() -> void { // ~271 ms
+  //   map<string, int> vars;
+  //   vector<decimal> vars2(1, 0);
+
+  //   GraphPNG g(1920, 1080, -3, 10, -1.5, 6);
+  //   g.drawAxis();
+  //   g.drawFunction(parse("x + 1", vars), 0, vars2, BLUE);
+  //   g.drawFunction(parse("sin(x)", vars), 0, vars2, RED);
+  //   g.drawFunction(parse("cos(x)", vars), 0, vars2, GREEN);
+  //   g.drawFunction(parse("tan(x)", vars), 0, vars2, YELLOW);
+  //   g.drawFunction(parse("x^2", vars), 0, vars2, CYAN);
+  //   g.save("graph.png");
+  // }) << "ms"
+  //      << endl;
+
   cout << "graph 1: " << benchmark([]() -> void { // ~271 ms
     map<string, int> vars;
     vector<decimal> vars2(1, 0);
 
-    Graph g(1920, 1080, -3, 10, -1.5);
-    g.drawAxis();
-    g.drawFunction(parse("x + 1", vars), 0, vars2, BLUE);
-    g.drawFunction(parse("sin(x)", vars), 0, vars2, RED);
-    g.drawFunction(parse("cos(x)", vars), 0, vars2, GREEN);
-    g.drawFunction(parse("tan(x)", vars), 0, vars2, YELLOW);
-    g.drawFunction(parse("x^2", vars), 0, vars2, CYAN);
-    g.save("graph.png");
-  }) << "ms"
-       << endl;
-
-  cout << "graph 1: " << benchmark([]() -> void { // ~271 ms
-    map<string, int> vars;
-    vector<decimal> vars2(1, 0);
-
-    GraphSVG g("example.svg", 1920, 1080, -3.0f, 10.0f, -3.0f, 10.0f, false);
-    g.drawFn(parse("x + 1", vars), 0, vars2, 300, "#00f", 2.0f);
-    g.drawFn(parse("sin(x)", vars), 0, vars2, 300, "#f00", 2.0f);
-    g.drawFn(parse("cos(x)", vars), 0, vars2, 300, "#0f0", 2.0f);
-    g.drawFn(parse("tan(x)", vars), 0, vars2, 300, "#ff0", 2.0f);
-    g.drawFn(parse("x^2", vars), 0, vars2, 300, "#0ff", 2.0f);
+    GraphSVG g("example.svg", 1920, 1080, -1.0f, 10.0f, -20.0f, 20.0f, EqualizeXAxes);
+    g.drawFn(parse("x + 1", vars), 0, vars2, 1920, "#00f", 2.0f);
+    g.drawFn(parse("sin(x)", vars), 0, vars2, 1920, "#f00", 2.0f);
+    g.drawFn(parse("cos(x)", vars), 0, vars2, 1920, "#0f0", 2.0f);
+    g.drawFn(parse("tan(x)", vars), 0, vars2, 1920, "#ff0", 2.0f);
+    g.drawFn(parse("x^2", vars), 0, vars2, 1920, "#0ff", 2.0f);
     g.save();
   }) << "ms"
        << endl;
@@ -2577,3 +2655,4 @@ int main()
 // https://www.dummies.com/wp-content/uploads/323191.image0.png
 // ALLE KONSTRUKTOREN UMBENENNEN -> (int t1) : t(t1)  =>  (int _t) : t(_t)
 // ueberall: vector<...> -> array<...>
+// Todo: GraphSVG -> Zahlen anpassen range
