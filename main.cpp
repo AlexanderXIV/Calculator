@@ -8,11 +8,16 @@
 #include <algorithm>
 #include <functional>
 #include <fstream>
+#include <assert.h>
+#include <array>
 
+#ifndef _WIN32
 #include <png++/image.hpp>
 #include <png++/rgb_pixel.hpp>
+#endif
 
 using std::abs;
+using std::array;
 using std::cin;
 using std::cout;
 using std::endl;
@@ -31,10 +36,20 @@ using std::vector;
 
 #define watch(x) cout << #x << " is " << x << endl
 
-#if defined __linux__ || defined __APPLE__
-#else
-#define M_PI 3.141592653589793
+#ifndef INFINITY
 #define INFINITY 1e8
+#endif
+
+#ifndef M_PI
+#define M_PI 3.14159265358979323846 /* pi */
+#endif
+
+#ifndef M_PI_2
+#define M_PI_2 1.57079632679489661923 /* pi/2 */
+#endif
+
+#ifndef M_E
+#define M_E 2.7182818284590452354 /* e */
 #endif
 
 typedef long double decimal;
@@ -73,15 +88,12 @@ enum TokenKind
 struct Token
 {
   TokenKind kind;
-  // union
-  // {
   decimal value;
   string name;
-  // };
 
   Token(TokenKind _kind) : kind(_kind){};
-  Token(TokenKind _kind, decimal _value) : kind(TokenValue), value(_value){};
-  Token(TokenKind _kind, string _name) : kind(TokenVar), name(_name){};
+  Token(decimal _value) : kind(TokenValue), value(_value){};
+  Token(string _name) : kind(TokenVar), name(_name){};
 
   friend ostream &operator<<(ostream &os, const Token &t);
 };
@@ -208,8 +220,8 @@ Token make_token(const string &str)
   if (str == "ln")
     return Token(TokenLn);
   if (is_decimal(str))
-    return Token(TokenVar, stof(str));
-  return Token(TokenValue, str);
+    return Token(stof(str));
+  return Token(str);
 }
 
 void tokenize(string str, vector<Token> &result)
@@ -599,9 +611,7 @@ typedef std::unique_ptr<Node> NodePtr;
 struct Node
 {
   NodeKind kind;
-  // Optimierung: union
   decimal value;
-
   int varId;
   string varName;
 
@@ -1249,7 +1259,7 @@ NodePtr simplify(const NodePtr &ptr_node)
     if (a == NodeAsin) // ATTENTION : should be definition area, value range
       return move(a.get()->a);
     else if (a == NodeAcos)
-      return sqrt(to_node(1) - move(a.get()->a) ^ to_node(2));
+      return sqrt(to_node(1) - (move(a.get()->a) ^ to_node(2)));
     else if (a == NodeMul && a.get()->a == NodeValue && a.get()->a.get()->value == -1)
       return to_node(-1) * sin(move(a.get()->b));
     else if (a == NodeMul && a.get()->b == NodeValue && a.get()->b.get()->value == -1)
@@ -1262,7 +1272,7 @@ NodePtr simplify(const NodePtr &ptr_node)
     if (a == NodeAcos) // ATTENTION : should be definition area, value range
       return move(a.get()->a);
     else if (a == NodeAsin)
-      return sqrt(to_node(1) - move(a.get()->a) ^ to_node(2));
+      return sqrt(to_node(1) - (move(a.get()->a) ^ to_node(2)));
     else if (a == NodeMul && a.get()->a == NodeValue && a.get()->a.get()->value == -1)
       return cos(move(a.get()->b));
     else if (a == NodeMul && a.get()->b == NodeValue && a.get()->b.get()->value == -1)
@@ -1462,8 +1472,8 @@ range getLimits(const NodePtr &ptr_node)
       int s1 = (int)(a.min_val / PI2);
       if (a.min_val < 0)
         --s1;
-      a.min_val -= s1 * PI2;
-      a.max_val -= s1 * PI2;
+      a.min_val -= (double)(s1 * PI2);
+      a.max_val -= (double)(s1 * PI2);
 
       if (a.min_val < M_PI_2)
       {
@@ -1497,8 +1507,8 @@ range getLimits(const NodePtr &ptr_node)
       int s1 = (int)(a.min_val / PI2);
       if (a.min_val < 0)
         --s1;
-      a.min_val -= s1 * PI2;
-      a.max_val -= s1 * PI2;
+      a.min_val -= (double)(s1 * PI2);
+      a.max_val -= (double)(s1 * PI2);
 
       if (a.min_val < M_PI)
       {
@@ -1758,63 +1768,49 @@ bool brents_fun(std::function<double(double)> f, const double lower, const doubl
 // returns number of roots found
 int find_all_roots(std::function<double(double)> f, const double lower, const double upper, const double tol, vector<double> &roots)
 {
-  // double value, next_tol,
-  //        last_val = abs(f(lower)),
-  //        last_tol = abs(last_val - tol);
-
-  // for (double x = lower + tol; x <= upper; x += tol)
-  // {
-  //   value = abs(f(x));
-  //   next_tol = abs(value - tol);
-  //   cout << x << ": " << last_val << "  " << (last_tol < next_tol) << endl;
-  //   if (last_val < tol && last_tol < next_tol)
-  //     roots.push_back(x);
-  //   last_tol = next_tol;
-  //   last_val = value;
-  // }
-
   for (double x = lower; x <= upper; x += tol)
-    if (abs(abs(f(x - tol)) - abs(f(x))) < tol && abs(abs(f(x)) - abs(f(x + tol))) < tol && abs(f(x)) < tol) // temp
+    if (abs(f(x) - f(x - tol)) < tol && abs(f(x) - f(x + tol)) < tol && abs(f(x)) < tol) // temp
     {
       roots.push_back(x);
       cout << f(x - tol) << " " << f(x) << " " << f(x + tol) << endl;
     }
-
-  return roots.size();
+  return (int)roots.size();
 }
 
 // template -> Complex64
+template <typename T>
 struct Complex
 {
   bool is_kartesian;
-  decimal real, img;
-  Complex(decimal r, decimal i = 0, bool is_p = true) : real(r), img(i), is_kartesian(is_p){};
+  T real, img;
+  Complex(T r, T i = 0, bool is_p = true) : real(r), img(i), is_kartesian(is_p){};
 
-  friend ostream &operator<<(ostream &os, const Complex &t);
+  template <typename T1>
+  friend ostream &operator<<(ostream &os, const Complex<T> &t);
 
-  inline Complex operator+(const Complex &b)
+  inline Complex<T> operator+(const Complex<T> &b)
   {
     assert(is_kartesian && "wrong format");
-    return Complex(real + b.real, img + b.img);
+    return Complex<T>(real + b.real, img + b.img);
   }
 
-  inline Complex operator-(const Complex &b)
+  inline Complex<T> operator-(const Complex<T> &b)
   {
     assert(is_kartesian && "wrong format");
-    return Complex(real - b.real, img - b.img);
+    return Complex<T>(real - b.real, img - b.img);
   }
 
-  inline Complex operator*(const Complex &b)
+  inline Complex<T> operator*(const Complex<T> &b)
   {
     assert(is_kartesian && "wrong format");
-    return Complex(real * b.real - img * b.img, real * b.img + img * b.real);
+    return Complex<T>(real * b.real - img * b.img, real * b.img + img * b.real);
   }
 
-  Complex operator/(const Complex &b)
+  Complex<T> operator/(const Complex<T> &b)
   {
     assert(is_kartesian && "wrong format");
-    decimal d1 = b.real * b.real + b.img * b.img;
-    return Complex((real * b.real - img * b.img) / d1, (real * b.img + img * b.real) / d1);
+    T d1 = b.real * b.real + b.img * b.img;
+    return Complex<T>((real * b.real - img * b.img) / d1, (real * b.img + img * b.real) / d1);
   }
 
   void cartesian_to_polar()
@@ -1822,7 +1818,7 @@ struct Complex
     assert(is_kartesian && "wrong format");
     assert((img != 0 || real != 0) && "error, not a complex num");
     is_kartesian = false;
-    decimal r = sqrt(real * real + img * img);
+    T r = sqrt(real * real + img * img);
     if (img >= 0)
     {
       if (real > 0)
@@ -1841,11 +1837,13 @@ struct Complex
   {
     assert(!is_kartesian && "wrong format");
     is_kartesian = true;
-    decimal r = real;
+    T r = real;
     real *= cos(img);
     img = r * sin(img);
   }
 };
+
+typedef Complex<double> Complex64;
 
 // dringend ueberarbeiten
 // inline Complex operator+(const decimal &a, const Complex &b) { return Complex(a, 0) + b; }
@@ -1857,58 +1855,63 @@ struct Complex
 // inline Complex operator*(const Complex &a, const decimal &b) { return a * Complex(b, 0); }
 // inline Complex operator/(const Complex &a, const decimal &b) { return a / Complex(b, 0); }
 
-pair<Complex, Complex> sqrt(Complex a)
+template <typename T>
+pair<Complex<T>, Complex<T>> sqrt(Complex<T> a)
 {
   a.cartesian_to_polar();
   a.is_kartesian = true;
-  decimal r = sqrt(a.real);
+  T r = sqrt(a.real);
   a.img *= 0.5;
   a.real = r * cos(a.img);
   a.img = r * sin(a.img);
-  return make_pair(a, Complex(-1 * a.real, -1 * a.img));
+  return make_pair(a, Complex<T>(-1 * a.real, -1 * a.img));
 }
 
-Complex sqrt_only_first(Complex a) // returns only first solution (second in principal identical)
+template <typename T>
+Complex<T> sqrt_only_first(Complex<T> a) // returns only first solution (second in principal identical)
 {
   a.cartesian_to_polar();
   a.is_kartesian = true;
-  decimal r = sqrt(a.real);
+  T r = sqrt(a.real);
   a.img *= 0.5;
   a.real = r * cos(a.img);
   a.img = r * sin(a.img);
   return a;
 }
 
-vector<Complex> cbrt(Complex a) // array
+template <typename T>
+array<Complex<T>, 3> cbrt(Complex<T> a) // array
 {
   a.cartesian_to_polar();
   a.is_kartesian = true;
-  decimal r = cbrt(a.real);
+  T r = cbrt(a.real);
   a.img /= 3;
-  const decimal img1 = a.img + PI2 / 3;
-  const decimal img2 = a.img + 2 * PI2 / 3;
-  return vector<Complex>{Complex(r * cos(a.img), r * sin(a.img)), Complex(r * cos(img1), r * sin(img1)), Complex(r * cos(img2), r * sin(img2))};
+  const T img1 = a.img + PI2 / 3;
+  const T img2 = a.img + 2 * PI2 / 3;
+  return array<Complex<T>, 3>{Complex<T>(r * cos(a.img), r * sin(a.img)), Complex<T>(r * cos(img1), r * sin(img1)), Complex<T>(r * cos(img2), r * sin(img2))};
 }
 
-vector<Complex> n_root(Complex a, int n)
+template <typename T>
+vector<Complex<T>> n_root(Complex<T> a, int n)
 {
   assert(n > 0);
   a.cartesian_to_polar();
   a.is_kartesian = true;
-  decimal r = pow(a.real, 1 / (double)n);
+  T r = pow(a.real, 1 / (double)n);
   a.img /= n;
-  vector<Complex> solutions;
-  decimal tmp;
+  vector<Complex<T>> solutions;
+  T tmp;
   for (int i = 0; i < n; ++i)
   {
     tmp = a.img + (PI2 * i) / n;
-    solutions.push_back(Complex(r * cos(tmp), r * sin(tmp)));
+    solutions.push_back(Complex<T>(r * cos(tmp), r * sin(tmp)));
   }
   return solutions;
 }
 
 // returns only one solution (k = 0), all solutions: a.img += 2 * M_PI * k, k E Z
-Complex ln(Complex a)
+template <typename T>
+Complex<T> ln(Complex<T> a)
 {
   a.cartesian_to_polar();
   a.is_kartesian = true;
@@ -1916,7 +1919,8 @@ Complex ln(Complex a)
   return a;
 }
 
-ostream &operator<<(ostream &os, const Complex &c)
+template <typename T>
+ostream &operator<<(ostream &os, const Complex<T> &c)
 {
   if (c.real == 0)
   {
@@ -1945,7 +1949,8 @@ ostream &operator<<(ostream &os, const Complex &c)
   return os;
 }
 
-ostream &operator<<(ostream &os, const vector<Complex> &v)
+template <typename T>
+ostream &operator<<(ostream &os, const vector<Complex<T>> &v)
 {
   cout << '[';
   bool is_first = true;
@@ -1958,25 +1963,28 @@ ostream &operator<<(ostream &os, const vector<Complex> &v)
   return os;
 }
 
-ostream &operator<<(ostream &os, const pair<Complex, Complex> &p)
+template <typename T>
+ostream &operator<<(ostream &os, const pair<Complex<T>, Complex<T>> &p)
 {
   cout << '[' << p.first << ", " << p.second << ']';
   return os;
 }
 
-pair<Complex, Complex> abc(decimal a, decimal b, decimal c)
+template <typename T>
+pair<Complex<T>, Complex<T>> abc(T a, T b, T c)
 {
   assert(a != 0 && "not abc Formula");
-  auto d1 = sqrt_only_first(Complex(b * b - 4 * a * c));
-  const decimal a2 = 2 * a, pre_calc_img = d1.img / a2;
-  return make_pair(Complex((d1.real - b) / a2, pre_calc_img), Complex((-d1.real - b) / a2, -pre_calc_img));
+  auto d1 = sqrt_only_first(Complex<T>(b * b - 4 * a * c));
+  const T a2 = 2 * a, pre_calc_img = d1.img / a2;
+  return make_pair(Complex<T>((d1.real - b) / a2, pre_calc_img), Complex<T>((-d1.real - b) / a2, -pre_calc_img));
 }
 
-std::array<Complex, 3> cardan(decimal a1, decimal b1, decimal c1, decimal d1)
+template <typename T>
+array<Complex<T>, 3> cardan(T a1, T b1, T c1, T d1)
 {
   assert(a1 != 0);
 
-  decimal a, b, c, p, q, d, tmp;
+  T a, b, c, p, q, d, tmp;
   a = b1 / a1, b = c1 / a1, c = d1 / a1;
   tmp = a * a / 3.0;
   p = b - tmp;
@@ -1986,37 +1994,38 @@ std::array<Complex, 3> cardan(decimal a1, decimal b1, decimal c1, decimal d1)
   tmp = a / 3;
   if (abs(d) < 10e-6) // naja, globaler Vegleich
   {
-    decimal first = 3 * q / p - tmp;
+    T first = 3 * q / p - tmp;
     b = a1 * first + b1;
 
-    Complex d1 = sqrt_only_first(Complex(b * b - 4 * a1 * (b * first + c1)));
-    const decimal a2 = 2 * a1, pre_calc_img = d1.img / a2;
-    return std::array<Complex, 3>{Complex(first), Complex((d1.real - b) / a2, pre_calc_img), Complex((-d1.real - b) / a2, -pre_calc_img)};
+    Complex<T> d1 = sqrt_only_first(Complex<T>(b * b - 4 * a1 * (b * first + c1)));
+    const T a2 = 2 * a1, pre_calc_img = d1.img / a2;
+    return array<Complex<T>, 3>{Complex<T>(first), Complex<T>(((d1.real - b) / a2), pre_calc_img), Complex<T>((-d1.real - b) / a2, -pre_calc_img)};
   }
   else if (d > 0)
   {
     d = sqrt(d);
-    decimal first = q / 2;
+    T first = q / 2;
     first = cbrt(d - first) - cbrt(d + first) - tmp;
     b = a1 * first + b1;
 
-    Complex d1 = sqrt_only_first(Complex(b * b - 4 * a1 * (b * first + c1)));
-    const decimal a2 = 2 * a1, pre_calc_img = d1.img / a2;
-    return std::array<Complex, 3>{Complex(first), Complex((d1.real - b) / a2, pre_calc_img), Complex((-d1.real - b) / a2, -pre_calc_img)};
+    Complex<T> d1 = sqrt_only_first(Complex<T>(b * b - 4 * a1 * (b * first + c1)));
+    const T a2 = 2 * a1, pre_calc_img = d1.img / a2;
+    return array<Complex<T>, 3>{Complex<T>(first), Complex<T>((d1.real - b) / a2, pre_calc_img), Complex<T>((-d1.real - b) / a2, -pre_calc_img)};
   }
   else
   {
-    decimal r = sqrt(-4.0 * p / 3.0);
-    decimal phi = acos(-q / 2.0 * sqrt(-27.0 / (p * p * p))) / 3.0;
+    T r = sqrt(-4.0 * p / 3.0);
+    T phi = acos(-q / 2.0 * sqrt(-27.0 / (p * p * p))) / 3.0;
 
-    return std::array<Complex, 3>{Complex(r * cos(phi) - tmp), Complex(r * cos(phi + 2.0 / 3.0 * M_PI) - tmp), Complex(r * cos(phi + 4.0 / 3.0 * M_PI) - tmp)};
+    return array<Complex<T>, 3>{Complex<T>(r * cos(phi) - tmp), Complex<T>(r * cos(phi + 2.0 / 3.0 * M_PI) - tmp), Complex<T>(r * cos(phi + 4.0 / 3.0 * M_PI) - tmp)};
   }
 }
 
-std::array<Complex, 4> quart(decimal a1, decimal b1, decimal c1, decimal d1, decimal e1)
+template <typename T>
+array<Complex<T>, 4> quart(T a1, T b1, T c1, T d1, T e1)
 {
   assert(a1 != 0);
-  decimal a, b, c, p, q, r, tmp;
+  T a, b, c, p, q, r, tmp;
   a = b1 / a1, b = c1 / a1, c = d1 / a1, tmp = a * a;
 
   p = -3.0 / 8.0 * tmp + b;
@@ -2025,14 +2034,17 @@ std::array<Complex, 4> quart(decimal a1, decimal b1, decimal c1, decimal d1, dec
 
   auto cd = cardan(1.0, -2.0 * p, p * p - 4.0 * r, q * q);
 
-  Complex z1 = sqrt_only_first(Complex(0) - cd[0]), z2 = sqrt_only_first(Complex(0) - cd[1]), z3 = sqrt_only_first(Complex(0) - cd[2]);
-  Complex omega = (q > 0 == (z1 * z2 * z3).real > 0) ? Complex(0.5) : Complex(-0.5);
-  Complex tmp2 = a / 4.0;
-  return std::array<Complex, 4>{Complex(omega * (z1 + z2 - z3) - tmp2), Complex(omega * (z1 - z2 + z3) - tmp2), Complex(omega * (z2 - z1 + z3) - tmp2) /* entspricht dem ersten??? */, Complex(omega * (Complex(0) - z1 - z2 - z3) - tmp2) /* entsprciht dem zweiten??? */};
+  Complex<T> z1 = sqrt_only_first(Complex<T>(0) - cd[0]), z2 = sqrt_only_first(Complex<T>(0) - cd[1]), z3 = sqrt_only_first(Complex<T>(0) - cd[2]);
+  Complex<T> omega = (q > 0 == (z1 * z2 * z3).real > 0) ? Complex<T>(0.5) : Complex<T>(-0.5);
+  Complex<T> tmp2 = a / 4.0;
+  return array<Complex<T>, 4>{Complex<T>(omega * (z1 + z2 - z3) - tmp2), Complex<T>(omega * (z1 - z2 + z3) - tmp2), Complex<T>(omega * (z2 - z1 + z3) - tmp2) /* entspricht dem ersten??? */, Complex<T>(omega * (Complex<T>(0) - z1 - z2 - z3) - tmp2) /* entsprciht dem zweiten??? */};
 }
 #pragma endregion
 
 #pragma region Visualisation
+// #define ENABLE_PNG
+#ifdef ENABLE_PNG
+#ifndef _WIN32
 const int len_seperation_lines = 5;
 
 #define MAX_VAL (uint16_t)(UINT16_MAX)
@@ -2247,6 +2259,8 @@ struct GraphPNG
     img.write(name);
   }
 };
+#endif
+#endif
 
 enum EqualizeType
 {
@@ -2264,38 +2278,57 @@ const int nums_circle_radius = 10;
 const int num_shift_x_axis = 20;
 const int num_shift_y_axis = num_shift_x_axis;
 
-// #define MODE_LIGHT
-#define MODE_DARK
-// #define MODE_SUPER_DARK
-// default: MODE_DARK
+enum Mode
+{
+  LIGHT,
+  DARK,
+  SUPER_DARK,
+  PERSONALIZED
+};
 
-#if defined(MODE_LIGHT)
-const string color_background = "#fff";
-const string color_axis = "#000";
-const string color_lines = "#E5E5E5";
-const string color_lines_highlighted = "#C0C0C0";
-#elif defined(MODE_SUPER_DARK)
-const string color_background = "#000";
-const string color_axis = "#fff";
-const string color_lines = "#1A1A1A";
-const string color_lines_highlighted = "#3F3F3F";
-#else
-const string color_background = "#333333";
-const string color_axis = "#fff";
-const string color_lines = "#424242";
-const string color_lines_highlighted = "#5C5C5C";
-#endif
+struct Style
+{
+  Mode mode;
+  string color_background, color_axis, color_lines, color_lines_highlighted, color_nums;
 
-const string color_nums = color_axis;
-const string style = "background-color:" + color_background + ";shape-rendering:geometricPrecision; text-rendering:geometricPrecision; image-rendering:optimizeQuality; fill-rule:evenodd; clip-rule:evenodd;";
+  Style(const Mode _mode) : mode(_mode)
+  {
+    assert(mode != PERSONALIZED);
+    if (mode == LIGHT)
+    {
+      color_background = "#fff";
+      color_axis = "#000";
+      color_lines = "#E5E5E5";
+      color_lines_highlighted = "#C0C0C0";
+    }
+    else if (mode == DARK)
+    {
+      color_background = "#333333";
+      color_axis = "#fff";
+      color_lines = "#424242";
+      color_lines_highlighted = "#5C5C5C";
+    }
+    else
+    {
+      color_background = "#000";
+      color_axis = "#fff";
+      color_lines = "#1A1A1A";
+      color_lines_highlighted = "#3F3F3F";
+    }
+    color_nums = color_axis;
+  };
+
+  Style(const string _color_background, const string _color_axis, const string _color_lines, const string _color_lines_highlighted, const string _color_nums) : mode(PERSONALIZED), color_background(_color_background), color_axis(_color_axis), color_lines(_color_lines), color_lines_highlighted(_color_lines_highlighted), color_nums(_color_nums){};
+};
+
 const string url = "http://www.w3.org/2000/svg";
-
 struct GraphSVG
 {
   float dif_tick_x, dif_tick_y;
   int width, height;
   bool set_window;
   float xMin, xMax, yMin, yMax;
+  Style style_mode;
   std::ofstream pic;
 
   // Fehler: Keine Y-Achse, X-Achse unv.
@@ -2311,10 +2344,10 @@ struct GraphSVG
         stn(x, ((++counter >= higlighting_step) ? counter = 0, true : false));
     }
     else if (max_val < 0)
-      for (float x = max_val - fmod(max_val, tick); x > min_val; x -= tick) // flaot inacurracy, reason for partly ugly layout (left, right)
+      for (float x = max_val - (float)fmod(max_val, tick); x > min_val; x -= tick) // flaot inacurracy, reason for partly ugly layout (left, right)
         stn(x, ((++counter >= higlighting_step) ? counter = 0, true : false));
     else if (min_val > 0)
-      for (float x = min_val + fmod(min_val, tick); x < max_val; x += tick)
+      for (float x = min_val + (float)fmod(min_val, tick); x < max_val; x += tick)
         stn(x, ((++counter >= higlighting_step) ? counter = 0, true : false));
   }
 
@@ -2342,13 +2375,14 @@ struct GraphSVG
 
   float canvasYFromY(float y) { return (float)height - (float)height * ((y - yMin) / (yMax - yMin)); }
 
-  std::array<float, 2> canvasPtFromXY(float x, float y) { return std::array<float, 2>{(float)width * ((x - xMin) / (xMax - xMin)), (float)height - ((y - yMin) / (yMax - yMin)) * (float)height}; }
+  array<float, 2> canvasPtFromXY(float x, float y) { return array<float, 2>{(float)width * ((x - xMin) / (xMax - xMin)), (float)height - ((y - yMin) / (yMax - yMin)) * (float)height}; }
 
-  GraphSVG(const string filename, const int _width, const int _height, float _xMin, float _xMax, float _yMin, float _yMax, EqualizeType equalizetype, bool drawAxes = true) : width(_width), height(_height), set_window(false), xMin(_xMin), xMax(_xMax), yMin(_yMin), yMax(_yMax)
+  GraphSVG(const string filename, const int _width, const int _height, float _xMin, float _xMax, float _yMin, float _yMax, EqualizeType equalizetype, Style _style_mode = Style(DARK), bool drawAxes = true) : width(_width), height(_height), set_window(false), xMin(_xMin), xMax(_xMax), yMin(_yMin), yMax(_yMax), style_mode(_style_mode)
   {
     pic.open(filename);
     pic << std::setprecision(5);
 
+    const string style = "background-color:" + style_mode.color_background + ";shape-rendering:geometricPrecision; text-rendering:geometricPrecision; image-rendering:optimizeQuality; fill-rule:evenodd; clip-rule:evenodd;";
     pic << "<svg width=\"" << width << "\" height=\"" << height << "\" style=\"" << style << "\" xmlns=\"" << url << "\"><style>.function:hover{stroke-width: 4;transition: all ease 0.3s;}.label:hover{cursor: default;pointer-events: none;}.label{cursor: default;pointer-events: none;}</style>\n";
     pic << "<title>Calculator</title>\n";
     if (equalizetype == EqualizeXAxes)
@@ -2388,45 +2422,45 @@ struct GraphSVG
     float tmp_x = (float)perfect_val_len * (xMax - xMin) / (float)width;
     int ceros_x = (int)floor(log10(tmp_x));
     if (ceros_x != 0)
-      tmp_x /= pow(10, ceros_x);
+      tmp_x /= (float)pow(10, ceros_x);
 
     if (tmp_x < 1.5)
-      dif_tick_x = 1 * pow(10, ceros_x);
+      dif_tick_x = 1 * (float)pow(10, ceros_x);
     else if (tmp_x < 3.5)
-      dif_tick_x = 2 * pow(10, ceros_x);
+      dif_tick_x = 2 * (float)pow(10, ceros_x);
     else if (tmp_x < 7.5)
-      dif_tick_x = 5 * pow(10, ceros_x);
+      dif_tick_x = 5 * (float)pow(10, ceros_x);
     else
-      dif_tick_x = pow(10, ceros_x + 1);
+      dif_tick_x = (float)pow(10, ceros_x + 1);
 
     float tmp_y = (float)perfect_val_len * (yMax - yMin) / (float)height;
     int ceros_y = (int)floor(log10(tmp_y));
     if (ceros_y != 0)
-      tmp_y /= pow(10, ceros_y);
+      tmp_y /= (float)pow(10, ceros_y);
 
     if (tmp_y < 1.5)
-      dif_tick_y = 1 * pow(10, ceros_y);
+      dif_tick_y = 1 * (float)pow(10, ceros_y);
     else if (tmp_y < 3.5)
-      dif_tick_y = 2 * pow(10, ceros_y);
+      dif_tick_y = 2 * (float)pow(10, ceros_y);
     else if (tmp_y < 7.5)
-      dif_tick_y = 5 * pow(10, ceros_y);
+      dif_tick_y = 5 * (float)pow(10, ceros_y);
     else
-      dif_tick_y = pow(10, ceros_y + 1);
+      dif_tick_y = (float)pow(10, ceros_y + 1);
 
     if (drawAxes)
     {
-      std::array<float, 2> leftPt = canvasPtFromXY(xMin, 0);
-      std::array<float, 2> rightPt = canvasPtFromXY(xMax, 0);
-      std::array<float, 2> botPt = canvasPtFromXY(0, yMin);
-      std::array<float, 2> topPt = canvasPtFromXY(0, yMax);
+      array<float, 2> leftPt = canvasPtFromXY(xMin, 0);
+      array<float, 2> rightPt = canvasPtFromXY(xMax, 0);
+      array<float, 2> botPt = canvasPtFromXY(0, yMin);
+      array<float, 2> topPt = canvasPtFromXY(0, yMax);
 
-      drawInterlines(xMin, xMax, dif_tick_x / 5, [=](float x, bool highlighted) -> void { drawVertical(canvasXFromX(x), botPt[1], topPt[1], ((highlighted) ? color_lines_highlighted : color_lines), 1.5f); });
-      drawInterlines(yMin, yMax, dif_tick_y / 5, [=](float y, bool highlighted) -> void { drawHorizontal(leftPt[0], canvasYFromY(y), rightPt[0], ((highlighted) ? color_lines_highlighted : color_lines), 1.5f); });
+      drawInterlines(xMin, xMax, dif_tick_x / 5, [=](float x, bool highlighted) -> void { drawVertical(canvasXFromX(x), botPt[1], topPt[1], ((highlighted) ? style_mode.color_lines_highlighted : style_mode.color_lines), 1.5f); });
+      drawInterlines(yMin, yMax, dif_tick_y / 5, [=](float y, bool highlighted) -> void { drawHorizontal(leftPt[0], canvasYFromY(y), rightPt[0], ((highlighted) ? style_mode.color_lines_highlighted : style_mode.color_lines), 1.5f); });
 
       if (0 <= leftPt[1] && rightPt[1] <= (float)height)
-        drawLine(leftPt[0], leftPt[1], rightPt[0], rightPt[1], color_axis, 1.5f);
+        drawLine(leftPt[0], leftPt[1], rightPt[0], rightPt[1], style_mode.color_axis, 1.5f);
       if (0 <= botPt[0] && topPt[0] <= (float)width)
-        drawLine(botPt[0], botPt[1], topPt[0], topPt[1], color_axis, 1.5f);
+        drawLine(botPt[0], botPt[1], topPt[0], topPt[1], style_mode.color_axis, 1.5f);
     }
   };
 
@@ -2463,7 +2497,7 @@ struct GraphSVG
 
         variables[varId] = x;
         float y = (float)eval(f, variables);
-        std::array<float, 2> canvasPt = canvasPtFromXY(x, y);
+        array<float, 2> canvasPt = canvasPtFromXY(x, y);
 
         // float perc = 0.5;
         // while (!first_point && abs(last_y - canvasPt[1]) > 30 && perc >= 0.5)
@@ -2543,7 +2577,7 @@ struct GraphSVG
     x = (float)shift_x + canvasXFromX((float)x);
     y = (float)shift_y + canvasYFromY((float)y);
     drawCircle(x, y, (float)rad, col);
-    drawText(x, y, color_nums, num);
+    drawText(x, y, style_mode.color_nums, num);
   }
 
   void save()
@@ -2565,11 +2599,11 @@ struct GraphSVG
     else if (yMin > 0)
       axis_shift_y = yMin, shift_y_axis = -shift_y_axis;
 
-    drawInterlines(xMin, xMax, dif_tick_x, [=](float x, bool highlighted) -> void { drawTextCircle(x, axis_shift_y, x, (highlighted) ? color_background : color_background, nums_circle_radius, 0, shift_y_axis); }); // change color
-    drawInterlines(yMin, yMax, dif_tick_y, [=](float y, bool highlighted) -> void { drawTextCircle(axis_shift_x, y, y, (highlighted) ? color_background : color_background, nums_circle_radius, shift_x_axis, 0); }); // change color
+    drawInterlines(xMin, xMax, dif_tick_x, [=](float x, bool highlighted) -> void { drawTextCircle(x, axis_shift_y, x, (highlighted) ? style_mode.color_background : style_mode.color_background, nums_circle_radius, 0, shift_y_axis); }); // change color
+    drawInterlines(yMin, yMax, dif_tick_y, [=](float y, bool highlighted) -> void { drawTextCircle(axis_shift_x, y, y, (highlighted) ? style_mode.color_background : style_mode.color_background, nums_circle_radius, shift_x_axis, 0); }); // change color
 
     if ((yMin <= 0 && 0 <= yMax) || (xMin <= 0 && 0 <= xMax))
-      drawTextCircle(axis_shift_x, axis_shift_y, 0, color_background, nums_circle_radius, num_shift_x_axis, num_shift_y_axis);
+      drawTextCircle(axis_shift_x, axis_shift_y, 0, style_mode.color_background, nums_circle_radius, num_shift_x_axis, num_shift_y_axis);
 
     pic << "</svg>";
     pic.flush();
@@ -2586,7 +2620,7 @@ long benchmark(std::function<void()> f)
   return std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
 }
 
-// compile with ./a.out example.svg 1920 1080 -6.2 4 -8.5 10.35 auto -function "sin(x)" "#d0f" 5.0 -function "cos(x)" "#ff0" 2.0
+// compile with ./a.out example.svg 1920 1080 -6.2 4 -8.5 10.35 auto dark "sin(x)" "#d0f" 5.0 "cos(x)" "#ff0" 2.0
 int main(int argc, char *argv[])
 {
   std::ios::sync_with_stdio(false);
@@ -2603,6 +2637,15 @@ int main(int argc, char *argv[])
     const float window_bottom = std::stof(argv[6]);
     const float window_top = std::stof(argv[7]);
     const string str_equalize = argv[8];
+    const string mode_typ = argv[9];
+
+    Mode style_typ;
+    if (mode_typ == "dark")
+      style_typ = DARK;
+    else if (mode_typ == "super_dark")
+      style_typ = SUPER_DARK;
+    else if (mode_typ == "light")
+      style_typ = LIGHT;
 
     EqualizeType equalize;
     if (str_equalize == "x")
@@ -2615,13 +2658,12 @@ int main(int argc, char *argv[])
       equalize = EqualizeNone;
 
     auto start = std::chrono::system_clock::now();
-    GraphSVG g(filename, resolution_height, resolution_width, window_left, window_right, window_bottom, window_top, equalize);
-    int i = 9;
+    GraphSVG g(filename, resolution_height, resolution_width, window_left, window_right, window_bottom, window_top, equalize, Style(style_typ));
+    int i = 10;
     while (i < argc)
     {
-      assert(string(argv[i]) == "-function");
       map<string, int> vars;
-      NodePtr p = parse(string(argv[++i]), vars);
+      NodePtr p = parse(string(argv[i]), vars);
       assert(vars.size() > 0);
       const string color = argv[++i];
       float stroke_width = std::stof(string(argv[++i]));
@@ -2755,7 +2797,7 @@ int main(int argc, char *argv[])
       map<string, int> vars;
       vector<decimal> vars2(1, 0);
 
-      GraphSVG g("example.svg", 1920, 1080, -6.2f, 10.0f, -8.5f, 10.35f, EqualizeYAxes);
+      GraphSVG g("example.svg", 1920, 1080, -6.2f, 10.0f, -8.5f, 10.35f, EqualizeYAxes, Style(SUPER_DARK));
       // GraphSVG g("example.svg", 1920, 1080, -10.2f, -6.0f, 8.5f, 10.35f, EqualizeNone);
       // GraphSVG g("example.svg", 1920, 1080, -10.2f, -6.0f, -10.5f, -8.35f, EqualizeNone);
       g.drawFn(parse("x + 1", vars), 0, vars2, 1920, "#00f", 2.0f);
@@ -2772,4 +2814,3 @@ int main(int argc, char *argv[])
 
 // ln(|x|) -> abs, ! 1 / x
 // https://www.dummies.com/wp-content/uploads/323191.image0.png
-// ueberall: vector<...> -> array<...>
