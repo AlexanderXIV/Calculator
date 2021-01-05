@@ -38,9 +38,9 @@ struct Token
   decimal value;
   string name;
 
-  Token(TokenKind _kind) : kind(_kind){};
-  Token(decimal _value) : kind(TokenValue), value(_value){};
-  Token(string _name) : kind(TokenVar), name(_name){};
+  Token(TokenKind _kind);
+  Token(decimal _value);
+  Token(string _name);
 
   friend ostream &operator<<(ostream &os, const Token &t);
 };

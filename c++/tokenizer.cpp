@@ -1,5 +1,9 @@
 #include "tokenizer.h"
 
+Token::Token(TokenKind _kind) : kind(_kind){};
+Token::Token(decimal _value) : kind(TokenValue), value(_value){};
+Token::Token(string _name) : kind(TokenVar), name(_name){};
+
 ostream &operator<<(ostream &os, const Token &t)
 {
   switch (t.kind)
